@@ -87,7 +87,7 @@ initDB <- function(TALK=FALSE){
                    "gender varchar(10), ",
                    "geographic_location varchar(50), ",
                    "phenotypes varchar(200), ",
-                   "comments varchar(50), ",
+                   "comments varchar(255), ",
                    "principal_investigator varchar(10), ",
                    "PRIMARY KEY (sample_id)",
                    ") ENGINE=",mysqlEngine," DEFAULT CHARSET=latin1",sep="")
