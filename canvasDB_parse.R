@@ -393,10 +393,13 @@ parseSNPsFromIlluminaVCFs <- function(VCFfile, variantCaller="GATK"){
     colnames(VCFdata) <- c("chr","pos","id","ref","alt","qual","filter","info","format","sample")
 
     VCFdata <- VCFdata[which(nchar(VCFdata[,"ref"])==1 & nchar(VCFdata[,"alt"])==1),]
-    VCFdata <- VCFdata[-1*grep("GL",VCFdata[,1]),]
+    VCFdata <- VCFdata[-1*grep("AE",VCFdata[,1]),]
+    VCFdata <- VCFdata[-1*grep("JH",VCFdata[,1]),]
+    VCFdata <- VCFdata[grep("PASS",VCFdata[,"filter"]),]
 
-    chr <- paste("chr",as.character(VCFdata[,"chr"],sep=""))
-    chr <- sub("chr ","chr",chr)
+#    chr <- paste("chr",as.character(VCFdata[,"chr"],sep=""))
+#    chr <- sub("chr ","chr",chr)
+    chr <- as.character(VCFdata[,"chr"])
     pos <- as.character(VCFdata[,"pos"])
     id <- as.character(VCFdata[,"id"])
     ref <- as.character(VCFdata[,"ref"])

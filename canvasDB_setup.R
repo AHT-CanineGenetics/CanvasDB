@@ -87,7 +87,7 @@ initDB <- function(TALK=FALSE){
                    "gender varchar(10), ",
                    "geographic_location varchar(50), ",
                    "phenotypes varchar(200), ",
-                   "comments varchar(50), ",
+                   "comments varchar(255), ",
                    "principal_investigator varchar(10), ",
                    "PRIMARY KEY (sample_id)",
                    ") ENGINE=",mysqlEngine," DEFAULT CHARSET=latin1",sep="")
@@ -118,10 +118,10 @@ initDB <- function(TALK=FALSE){
                    "details varchar(200), ",
                    "sift varchar(10), ",
                    "polyphen varchar(10), ",
-                   "phylop varchar(10), ",
-                   "lrt varchar(10), ",
-                   "mut_taster varchar(10), ",
-                   "gerp varchar(10), ",
+#                   "phylop varchar(10), ",
+#                   "lrt varchar(10), ",
+#                   "mut_taster varchar(10), ",
+#                   "gerp varchar(10), ",
                    "PRIMARY KEY(SNP_id)",
                    ") ENGINE=",mysqlEngine," DEFAULT CHARSET=latin1",sep="")
 

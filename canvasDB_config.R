@@ -22,12 +22,16 @@ annotationDatabaseName <- "canvasdb_annot_cf3"
 
 #ANNOVARpath <- "/Volumes/Data/tools/annovar/annotate_variation.pl" ## Add path to ANNOVAR executable
 #ANNOVARpathDB <- "/Volumes/Data/tools/annovar/humandb/" ## Add path to ANNOVAR annotation database
-ANNOVARpath <- "/Users/Ellen/Git/CanvasDB/annovar/annotate_variation.pl" ## Add path to ANNOVAR executable
-ANNOVARpathDB <- "/Users/Ellen/Git/CanvasDB/annovar/dogdb/" ## Add path to ANNOVAR annotation database
+ANNOVARpath <- "/home/eschofield/local/src/annovar/annotate_variation.pl" ## Add path to ANNOVAR executable
+ANNOVARpathDB <- "/home/eschofield/local/src/annovar/dogdb/" ## Add path to ANNOVAR annotation database
+
+VEPpath <- "/opt/vep/vep"
+snpEffPath <- "/home/eschofield/local/src/snpEff"
+snpEffDB <- "CanFam3.1.86"
+siftDB <- "CanFam3.1.83"
 
 VEPpath <- "/Users/Ellen/Git/ensembl-vep/vep"
 VEPpath <- paste("docker run -it -v /Users/Ellen/DockerData/vep_data:/opt/vep/.vep -v ", tmpfileDir, ":/data/ ensemblorg/ensembl-vep ./vep",sep="")
-
 
 dbSNPversion <- 151
 eVersion <- 95
