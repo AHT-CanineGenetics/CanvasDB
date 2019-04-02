@@ -10,7 +10,7 @@
 
 
 ## Import dbSNP data, SIFT scores and PolyPhen2 scores into local databases to enable quick annotations
-setupAnnotationDBtables <- function(tmpAnnotationDir=tmpfileDir, dbSNPversion=137, TALK=FALSE){
+setupAnnotationDBtables <- function(tmpAnnotationDir=tmpfileDir, dbSNPversion=151, TALK=FALSE){
  
   ## Import dbSNP rsIds if not already in database...
   dbSNP.table <- annotTables[["dbsnp"]]
@@ -118,8 +118,107 @@ setupAnnotationDBtables <- function(tmpAnnotationDir=tmpfileDir, dbSNPversion=13
   }
   dbDisconnect(con)
   
+  ## Import SNP scores if not already in database...
+  score.table <- annotTables[["score"]]
+  query <- paste("SHOW TABLES LIKE '",score.table,"';",sep="")
+  con <- connectToInhouseDB()
+  tmp <- dbGetQuery_E(con, query, TALK=TALK)
+  
+  if(nrow(tmp) == 0){
+    
+    cat("Imporing scores into database...\n")
+    
+#    scoreFile <- paste(tmpAnnotationDir,"hg19_ljb_all_parsed.txt",sep="")
+#    
+#    if(!file.exists(scoreFile)){
+#      scoreRawFile <- paste(ANNOVARpathDB,"hg19_ljb_all.txt",sep="")
+#      
+#      if(!file.exists(scoreRawFile)){
+#        stop("ljb_all file missing! Download using ANNOVAR.\n")
+#      }
+#      
+#      parseCmd <- paste("utils/prepare_annot_score_tables.pl ",scoreRawFile," > ",scoreFile,sep="")
+#      system(parseCmd)
+#    }
+#    
+#    
+#    query <- paste("CREATE TABLE ",score.table,
+#                   "(SNP_id varchar(20), ",
+#                   "sift double(5,2), ",
+#                   "polyphen double(5,2), ",
+#                   "phylop double(5,2), ",
+#                   "lrt double(5,2), ",
+#                   "mut_taster double(5,2), ",
+#                   "gerp double(5,2), ",
+#                   "PRIMARY KEY(SNP_id)",
+#                   ") ENGINE=",mysqlEngine," DEFAULT CHARSET=latin1",sep="")
+    
+    query <- paste("CREATE TABLE ",score.table,
+                   "(SNP_id varchar(20), ",
+                   "sift double(5,2), ",
+                   "PRIMARY KEY(SNP_id)",
+                   ") ENGINE=",mysqlEngine," DEFAULT CHARSET=latin1",sep="")
+    
+    tmp <- dbGetQuery_E(con,query,TALK=TALK)
+    
+    siftDataDir <- paste(snpEffPath, "/data/", siftDB, sep="")
+    files <- list.files(path=siftDataDir, pattern="*.gz", full.names=TRUE, recursive=FALSE)
+    lapply(files, function(x) {
+      t <- read.table(x, header=FALSE, sep="\t")
+      colnames(t)<- c("Position","Ref_allele","New_allele","Transcript_id","Gene_id","Gene_name","Region","Ref_amino_acid","New_amino_acid","Position_of_amino_acid_substitution","SIFT_score","SIFT_median_sequence_info","Num_seqs_at_position","dbSNP_id")
+      t <- t[-1*grep("ref",t[,14]),]
+      
+      chr <- gsub(".gz", "", basename(x))
+      SNPids <- paste(chr,t[,"Position"],t[,"Ref_allele"],t[,"New_allele"],sep="|")
+      
+      sift.scores <- as.character(t[,"SIFT_score"])
+      tmp <- cbind(SNPids, sift.scores)
+      
+      siftScorefile <- paste(tmpfileDir,"sift_scores.txt",sep="")
+      write.table(tmp,file=siftScorefile, sep="\t", col.names=FALSE, row.names=FALSE, quote=FALSE)
+      
+      query <- paste("LOAD DATA LOCAL INFILE '",siftScorefile,"' REPLACE INTO TABLE ",score.table,";",sep="")
+      tmp <- dbGetQuery_E(con,query,TALK=TALK)
+      
+    })
+    
+#    query <- paste("LOAD DATA LOCAL INFILE '",scoreFile,"' REPLACE INTO TABLE ",score.table,";",sep="")
+    
+#    tmp <- dbGetQuery_E(con, query, TALK=TALK)
+    
+    dbDisconnect(con)
+  }
+  
+  
+  
   addVEPAnnotation(dbSNPversion = dbSNPversion, eVersion = eVersion);
 
+}
+
+addSnpEffAnnotation <- function(tmpAnnotationDir=tmpfileDir, dbSNPversion=151, snpEffDb="CanFam3.1.86", TALK=FALSE){
+  
+  ## Annotate SNPS with VEP if not already in database...
+  cat("Importing SnpEff Annotation into database...\n")
+  tmpDatafile <- paste(tmpAnnotationDir,"/tmp_variantsToBeAnnotated.vcf",sep="")
+  
+  dbSNP.table <- annotTables[["dbsnp"]]
+  con <- connectToInhouseDB()
+  query <- paste("SELECT SNP_id FROM ",dbSNP.table,";",sep="")
+  inputSNPs <- dbGetQuery_E(con, query, TALK=TALK)
+  dbDisconnect(con)
+  
+  inputSNPids <- as.character(inputSNPs[,"SNP_id"])
+  inputSNPidsSplit <- strsplit(inputSNPids,"\\|")
+  inputChr <- sapply(inputSNPidsSplit,function(x){x[[1]]})
+  inputPos <- sapply(inputSNPidsSplit,function(x){x[[2]]})
+  inputRef <- sapply(inputSNPidsSplit,function(x){x[[3]]})
+  inputAlt <- sapply(inputSNPidsSplit,function(x){x[[4]]})
+  
+  SNPdata <- unique(cbind(inputChr,inputPos,inputSNPids,inputRef,inputAlt,".",".","."))
+  colnames(SNPdata) <- c("#CHROM","POS","ID","REF","ALT","QUAL","FILTER","INFO")
+  
+  write.table(SNPdata, file=tmpDatafile, sep="\t", quote=FALSE, row.names=FALSE, col.names=TRUE)
+  
 }
 
 addVEPAnnotation <- function(tmpAnnotationDir=tmpfileDir, dbSNPversion=dbSNPversion, eVersion=eVersion, TALK=FALSE){
@@ -158,7 +257,7 @@ addVEPAnnotation <- function(tmpAnnotationDir=tmpfileDir, dbSNPversion=dbSNPvers
                       "--input_file ",dockerDatafile,
                       "--output_file ", dockerVEPfile)
   print(vepCommand)
-#  system(vepCommand)
+  system(vepCommand)
   
   vepSNP.table <- annotTables[["vepSNP"]]
   
@@ -225,7 +324,7 @@ cleanUpTmpfiles <- function(tmpAnnotationDir){
 ## 1. dbSNP and dbSNPCommon - Assign rsId if available
 ## 2. refgene - Determine effect on transcript level
 ## 3. Scores - Amino acid substitution effects
-annotateSNPs <- function(inputSNPs, tmpAnnotationDir=".", dbSNPversion=137, TALK=FALSE){
+annotateSNPs <- function(inputSNPs, tmpAnnotationDir=".", dbSNPversion=151, TALK=FALSE){
   
   ps <- proc.time()[3]
   
@@ -303,20 +402,21 @@ annotateSNPs <- function(inputSNPs, tmpAnnotationDir=".", dbSNPversion=137, TALK
   cat("  - Annotating SNPs with dbSNP rs-ids...",sep="")
   con <- connectToInhouseDB()
   query <- paste("SELECT t1.SNP_id,t2.name FROM ",tmpSNP.table," as t1, ",annotTables[["dbsnp"]]," as t2 WHERE t1.SNP_id=t2.SNP_id;", sep="")
+  cat(query)
   tmp <- dbGetQuery_E(con, query, TALK=TALK)
   dbDisconnect(con)
   if(nrow(tmp)>0){
     dataToBeAdded[match(tmp[,"SNP_id"],dataToBeAdded[,"SNP_id"]),"dbSNP"] <- tmp[,"name"]
   }
   
-  con <- connectToInhouseDB()
-  query <- paste("SELECT t1.SNP_id,t2.name FROM ",tmpSNP.table," as t1, ",annotTables[["dbsnpCommon"]]," as t2 WHERE t1.SNP_id=t2.SNP_id;", sep="")
-  tmp <- dbGetQuery_E(con, query, TALK=TALK)
-  dbDisconnect(con)
-  if(nrow(tmp)>0){
-    dataToBeAdded[match(tmp[,"SNP_id"],dataToBeAdded[,"SNP_id"]),"dbSNP"] <- tmp[,"name"]
-    dataToBeAdded[match(tmp[,"SNP_id"],dataToBeAdded[,"SNP_id"]),"dbSNPcommon"] <- tmp[,"name"]
-  }
+#  con <- connectToInhouseDB()
+#  query <- paste("SELECT t1.SNP_id,t2.name FROM ",tmpSNP.table," as t1, ",annotTables[["dbsnpCommon"]]," as t2 WHERE t1.SNP_id=t2.SNP_id;", sep="")
+#  tmp <- dbGetQuery_E(con, query, TALK=TALK)
+#  dbDisconnect(con)
+#  if(nrow(tmp)>0){
+#    dataToBeAdded[match(tmp[,"SNP_id"],dataToBeAdded[,"SNP_id"]),"dbSNP"] <- tmp[,"name"]
+#    dataToBeAdded[match(tmp[,"SNP_id"],dataToBeAdded[,"SNP_id"]),"dbSNPcommon"] <- tmp[,"name"]
+#  }
   
   cat(proc.time()[3] - ps,"s\n");
   
@@ -324,17 +424,19 @@ annotateSNPs <- function(inputSNPs, tmpAnnotationDir=".", dbSNPversion=137, TALK
   ## Step 2. Annotate exonic variants against score table
   cat("  - Annotating SNPs with SNP scores...",sep="")
   con <- connectToInhouseDB()
-  query <- paste("SELECT t1.SNP_id,t2.sift,t2.polyphen,t2.phylop,t2.lrt,t2.mut_taster,t2.gerp FROM ",tmpSNP.table," as t1, ",annotTables[["score"]]," as t2 WHERE t1.SNP_id=t2.SNP_id;", sep="")
+#  query <- paste("SELECT t1.SNP_id,t2.sift,t2.polyphen,t2.phylop,t2.lrt,t2.mut_taster,t2.gerp FROM ",tmpSNP.table," as t1, ",annotTables[["score"]]," as t2 WHERE t1.SNP_id=t2.SNP_id;", sep="")
+  query <- paste("SELECT t1.SNP_id,t2.sift FROM ",tmpSNP.table," as t1, ",annotTables[["score"]]," as t2 WHERE t1.SNP_id=t2.SNP_id;", sep="")
+  cat(query)
   tmp <- dbGetQuery_E(con, query, TALK=TALK)
   dbDisconnect(con)
   if(nrow(tmp)>0){
     idsToBeAdded <- match(tmp[,"SNP_id"],dataToBeAdded[,"SNP_id"])
     dataToBeAdded[idsToBeAdded,"sift"] <- tmp[,"sift"]
-    dataToBeAdded[idsToBeAdded,"polyphen"] <- tmp[,"polyphen"]
-    dataToBeAdded[idsToBeAdded,"phylop"] <- tmp[,"phylop"]
-    dataToBeAdded[idsToBeAdded,"lrt"] <- tmp[,"lrt"]
-    dataToBeAdded[idsToBeAdded,"mut_taster"] <- tmp[,"mut_taster"]
-    dataToBeAdded[idsToBeAdded,"gerp"] <- tmp[,"gerp"]
+#    dataToBeAdded[idsToBeAdded,"polyphen"] <- tmp[,"polyphen"]
+#    dataToBeAdded[idsToBeAdded,"phylop"] <- tmp[,"phylop"]
+#    dataToBeAdded[idsToBeAdded,"lrt"] <- tmp[,"lrt"]
+#    dataToBeAdded[idsToBeAdded,"mut_taster"] <- tmp[,"mut_taster"]
+#    dataToBeAdded[idsToBeAdded,"gerp"] <- tmp[,"gerp"]
   }
   cat(proc.time()[3] - ps,"s\n");
   
@@ -344,12 +446,18 @@ annotateSNPs <- function(inputSNPs, tmpAnnotationDir=".", dbSNPversion=137, TALK
   dbDisconnect(con)
   
   ## Step 3. Annotate against refSeq genes
-  cat("  - Annotating SNPs against refGene...",sep="")
-  ANNOVARcmd <- paste(ANNOVARpath," -geneanno -buildver canFam3 -dbtype refgene ",tmpDatafile," ",ANNOVARpathDB,sep="")
-  system(ANNOVARcmd,ignore.stderr=TRUE)
+#  cat("  - Annotating SNPs against refGene...",sep="")
+#  ANNOVARcmd <- paste(ANNOVARpath," -geneanno -buildver canFam3 -dbtype refgene ",tmpDatafile," ",ANNOVARpathDB,sep="")
+  cat("  - Annotating SNPs against ensGene...",sep="")
+  ANNOVARcmd <- paste(ANNOVARpath," -geneanno -buildver canFam3 -dbtype ensgene ",tmpDatafile," ",ANNOVARpathDB,sep="")
+  cat(ANNOVARcmd)
+  system(ANNOVARcmd,ignore.stderr=FALSE)
   
   variantFunctionFile <- paste(tmpDatafile,".variant_function",sep="")
   exonicVariantFunctionFile <- paste(tmpDatafile,".exonic_variant_function",sep="")
+  
+  variantFunctionFile
+  file.info(variantFunctionFile)
   
   if(file.info(variantFunctionFile)$size > 0){
     variantFunctions <- read.table(variantFunctionFile, as.is=TRUE)
@@ -399,7 +507,7 @@ annotateSNPs <- function(inputSNPs, tmpAnnotationDir=".", dbSNPversion=137, TALK
 ##
 ## 1. dbSNP and dbSNPCommon - Assign rsId if available
 ## 2. refgene - Determine effect on transcript level
-annotateIndels <- function(inputIndels, tmpAnnotationDir=".", dbSNPversion=137, TALK=FALSE){
+annotateIndels <- function(inputIndels, tmpAnnotationDir=".", dbSNPversion=151, TALK=FALSE){
   
   ps <- proc.time()[3]
   
@@ -580,4 +688,103 @@ annotateIndels <- function(inputIndels, tmpAnnotationDir=".", dbSNPversion=137, 
   
   return(dataToBeAdded)
   
+}
+
+
+rebuildSNPSummary <- function(){
+  
+  ps <- proc.time()[3]
+  
+  con <- connectToInhouseDB()
+  sample.table <- dbTables[["sample"]]
+  SNPsummary.table <- dbTables[["SNP.summary"]]
+  chunkSize <- 500000
+  
+  sampleIds <- list()
+  SNPidsInSummary <- NULL
+  
+  query <- paste("SELECT SNP_id FROM ",SNPsummary.table,";")
+  currSNPids <- dbGetQuery_E(con,query,TALK=FALSE)
+  if(nrow(currSNPids)>0){ SNPidsInSummary <- currSNPids[,"SNP_id"] }
+  
+  query <- paste("UPDATE ",SNPsummary.table," SET nr_samples=0, samples='';",sep="")
+  res <- dbGetQuery_E(con,query,TALK=FALSE)
+  
+  query <- paste("SELECT sample_id FROM ",sample.table,";",sep="")
+  res <- dbGetQuery_E(con,query,TALK=FALSE)
+  sampleIds <- res[,1]
+  
+  for(sampleId in sampleIds){
+    
+    cat("Processing sample ",sampleId," of ",length(sampleIds),"...\n",sep="")
+    
+    SNPdata.table <- paste("snp_data_",sampleId,sep="")
+    variantsForSample <- list()
+    SNPsToBeInserted <- list()
+    
+    SNPsToBeInserted[["nrSamples"]] <- array(NA,0)
+    SNPsToBeInserted[["sampleStr"]] <- array(NA,0)
+    
+    variantsForSample[["sample_id"]] <- sampleId
+    variantsForSample[["SNPs"]] <- NULL
+    variantsForSample[["indels"]] <- NULL
+    
+    query <- paste("SELECT SNP_id FROM ",SNPdata.table,";",sep="")
+    snpIds <- dbGetQuery_E(con,query,TALK=FALSE)
+    variantsForSample[["SNPs"]] <- snpIds[,1]
+    
+    SNPids <- variantsForSample[["SNPs"]]
+    
+    sampleStr <- paste(",",sampleId,sep="")
+    
+    seenSNPs <- (names(SNPsToBeInserted[["nrSamples"]]) %in% SNPids)
+    SNPsToBeInserted[["sampleStr"]][seenSNPs] <- paste(SNPsToBeInserted[["sampleStr"]][seenSNPs],sampleStr,sep="")
+    SNPsToBeInserted[["nrSamples"]][seenSNPs] <- SNPsToBeInserted[["nrSamples"]][seenSNPs]+1
+    
+    newSNPids <- SNPids[!(SNPids %in% names(SNPsToBeInserted[["nrSamples"]]))]
+    
+    sampleStrsToBeAdded <- rep(as.character(sampleId), length(newSNPids))
+    names(sampleStrsToBeAdded) <- newSNPids
+    nrSamplesToBeAdded <- rep(1, length(newSNPids))
+    names(nrSamplesToBeAdded) <- newSNPids
+    SNPsToBeInserted[["sampleStr"]] <- c(SNPsToBeInserted[["sampleStr"]], sampleStrsToBeAdded)
+    SNPsToBeInserted[["nrSamples"]] <- c(SNPsToBeInserted[["nrSamples"]], nrSamplesToBeAdded)
+    
+    SNPobjectsize <- object.size(SNPsToBeInserted)
+    cat("Object sizes, SNPs:",SNPobjectsize,"\n")
+    
+    SNPsToBeInsertedTable <- cbind(names(SNPsToBeInserted[["nrSamples"]]), SNPsToBeInserted[["nrSamples"]], SNPsToBeInserted[["sampleStr"]])
+    colnames(SNPsToBeInsertedTable) <- c("SNP_id","nr_samples","sample_str")
+    
+    totalNrToInsert <- nrow(SNPsToBeInsertedTable)
+    
+    ## Divide large data into smaller chunks, to make sure MySQL doesn't crash
+    chunkStart <- 1
+    chunkEnd <- min(chunkSize,totalNrToInsert)
+    moreChunksToInsert <- TRUE
+    
+    while(moreChunksToInsert){
+      
+      SNPsToBeInsertedTableChunk <- SNPsToBeInsertedTable[chunkStart:chunkEnd,]
+      
+      alreadyInSummary <- (SNPsToBeInsertedTableChunk[,"SNP_id"] %in% SNPidsInSummary)
+      SNPsToBeUpdated <- SNPsToBeInsertedTableChunk[alreadyInSummary,,drop=FALSE]
+      SNPsToBeAdded <- SNPsToBeInsertedTableChunk[!alreadyInSummary,,drop=FALSE]
+      SNPidsInSummary <- c(SNPidsInSummary,SNPsToBeAdded[,"SNP_id"])
+      
+      cat(" chunk:",chunkStart,"-",chunkEnd," total:",nrow(SNPsToBeInsertedTable)," to update:",nrow(SNPsToBeUpdated)," to add:",nrow(SNPsToBeAdded),proc.time()[3] - ps,"s\n");
+      updateSNPsummaryTable(SNPsToBeUpdated, SNPsToBeAdded)
+      
+      if(chunkEnd<totalNrToInsert){
+        chunkStart <- chunkEnd+1
+        chunkEnd <-  min(chunkEnd+chunkSize,totalNrToInsert)
+      }
+      else{
+        moreChunksToInsert <- FALSE
+      }
+    }
+  }
+  
+  query <- "update snp_summary set samples=substr(samples,2);"
+  res <- dbGetQuery_E(con,query,TALK=FALSE)
 }
