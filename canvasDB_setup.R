@@ -111,7 +111,7 @@ initDB <- function(TALK=FALSE){
                    "nr_samples integer(6),",
                    "samples blob,",
                    "snp",dbSNPversion," varchar(20), ",
-                   "snp",dbSNPversion,"common varchar(20), ",
+#                   "snp",dbSNPversion,"common varchar(20), ",
                    "class varchar(40), ",
                    "severity integer(2), ",
                    "gene varchar(100), ",
@@ -127,7 +127,8 @@ initDB <- function(TALK=FALSE){
 
     tmp <- dbGetQuery_E(con,query,TALK=TALK)
 
-    query <- paste("CREATE INDEX summary_idx ON ",SNPsummary.table," (nr_samples, snp",dbSNPversion,"common,  snp",dbSNPversion,", severity);",sep="")
+#    query <- paste("CREATE INDEX summary_idx ON ",SNPsummary.table," (nr_samples, snp",dbSNPversion,"common,  snp",dbSNPversion,", severity);",sep="")
+    query <- paste("CREATE INDEX summary_idx ON ",SNPsummary.table," (nr_samples, snp",dbSNPversion,", severity);",sep="")
     tmp <- dbGetQuery_E(con,query,TALK=TALK)
 
     query <- paste("CREATE INDEX chrpos ON ",SNPsummary.table," (chr, pos);",sep="")
@@ -150,7 +151,7 @@ initDB <- function(TALK=FALSE){
                    "nr_samples integer(6),",
                    "samples blob,",
                    "snp",dbSNPversion," varchar(20), ",
-                   "snp",dbSNPversion,"common varchar(20), ",
+                   #"snp",dbSNPversion,"common varchar(20), ",
                    "class varchar(40), ",
                    "severity integer(2), ",
                    "gene varchar(100), ",
@@ -161,7 +162,8 @@ initDB <- function(TALK=FALSE){
     tmp <- dbGetQuery_E(con,query,TALK=TALK)
 
 
-    query <- paste("CREATE INDEX summary_idx ON ",indelSummary.table," (nr_samples, snp",dbSNPversion,"common,  snp",dbSNPversion,", severity);",sep="")
+    #query <- paste("CREATE INDEX summary_idx ON ",indelSummary.table," (nr_samples, snp",dbSNPversion,"common,  snp",dbSNPversion,", severity);",sep="")
+    query <- paste("CREATE INDEX summary_idx ON ",indelSummary.table," (nr_samples, snp",dbSNPversion,", severity);",sep="")
     tmp <- dbGetQuery_E(con,query,TALK=TALK)
 
     query <- paste("CREATE INDEX chrpos ON ",indelSummary.table," (chr, start, end);",sep="")
