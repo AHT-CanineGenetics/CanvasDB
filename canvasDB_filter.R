@@ -13,7 +13,7 @@
 ##  - 'filterSamples' is either 'all.other' (default) or an array with sample names
 ##  - 'discardSamples' is either 'none' (default) or an array with sample names
 ## The two parameters 'filterSamples' and 'discardSamples' can not be used at the same time
-filterSNPs <- function(inSamples, filterSamples="all.other", discardSamples="none", minIn=NA, maxOthers=0, minSeverity=3, noCache=FALSE, dbSNPfilterCommon=FALSE, summaryOnly=FALSE, TALK=FALSE){
+filterSNPs <- function(inSamples, filterSamples="all.other", discardSamples="none", minIn=NA, maxOthers=0, minSeverity=3, noCache=FALSE, dbSNPfilter=FALSE, summaryOnly=FALSE, TALK=FALSE){
 
     ps <- proc.time()[3]
 
@@ -95,8 +95,8 @@ filterSNPs <- function(inSamples, filterSamples="all.other", discardSamples="non
     q3opt1 <- ""
     q3opt2 <- ""
 
-    if(dbSNPfilterCommon){
-        q3opt1 <- paste(" AND snp",dbSNPversion,"common=''",sep="")
+    if(dbSNPfilter){
+        q3opt1 <- paste(" AND snp",dbSNPversion,"=''",sep="")
     }
     if(minSeverity>0){
         q3opt2 <- paste(" AND severity>=",minSeverity,sep="")
@@ -177,10 +177,6 @@ filterSNPs <- function(inSamples, filterSamples="all.other", discardSamples="non
                    "details varchar(200), ",
                    "sift varchar(10), ",
                    "polyphen varchar(10), ",
-                   "phylop varchar(10), ",
-                   "lrt varchar(10), ",
-                   "mut_taster varchar(10), ",
-                   "gerp varchar(10), ",
                    "PRIMARY KEY(SNP_id)",
                    ") ENGINE=",mysqlEngine," DEFAULT CHARSET=latin1",sep="")
 
@@ -188,13 +184,13 @@ filterSNPs <- function(inSamples, filterSamples="all.other", discardSamples="non
 
     tmpDatafile <- "tmp_filteredSNP.txt"
 
-    dataCols <- c("SNP_id","chr","pos","ref","alt",paste("snp",dbSNPversion,sep=""),"class","gene","details","sift","polyphen","phylop","lrt","mut_taster","gerp")
+    dataCols <- c("SNP_id","chr","pos","ref","alt",paste("snp",dbSNPversion,sep=""),"class","gene","details","sift","polyphen")
 
     write.table(filteredSNPdata[,dataCols], file=tmpDatafile, row.names=FALSE, col.names=FALSE, sep="\t", quote=FALSE)
 
     query <- paste("LOAD DATA LOCAL INFILE '",tmpDatafile,"' INTO TABLE ",tmpSNP.table,";",sep="")
     tmp <- dbGetQuery_E(con ,query, TALK=TALK)
-    file.remove(tmpDatafile)
+    #file.remove(tmpDatafile)
 
     SNPresults <- NULL
 
@@ -203,7 +199,7 @@ filterSNPs <- function(inSamples, filterSamples="all.other", discardSamples="non
         SNPdata.table <- paste("snp_data_",sample,sep="")
         sample_name <- names(allSampleIds)[match(sample, allSampleIds)]
 
-        q5 <- paste("SELECT ",noCacheStr," t1.SNP_id, t1.class,t1.chr,t1.pos,t1.ref,t1.alt,snp",dbSNPversion,",t1.gene, t2.heterozygous, t1.sift,t1.polyphen,t1.phylop,t1.lrt,t1.mut_taster,t1.gerp,t2.coverage,t2.ref_counts,t2.ref_starts,t2.alt_counts,t2.alt_starts,t1.details FROM ",tmpSNP.table," as t1, ",SNPdata.table," as t2 ",
+        q5 <- paste("SELECT ",noCacheStr," t1.SNP_id, t1.class,t1.chr,t1.pos,t1.ref,t1.alt,snp",dbSNPversion,",t1.gene, t2.heterozygous, t1.sift,t1.polyphen,t2.coverage,t2.ref_counts,t2.ref_starts,t2.alt_counts,t2.alt_starts,t1.details FROM ",tmpSNP.table," as t1, ",SNPdata.table," as t2 ",
                     " WHERE t1.SNP_id=t2.SNP_id;",sep="")
 
         SNPresultsForSample <- dbGetQuery_E(con, q5, TALK=TALK)
@@ -235,7 +231,7 @@ filterSNPs <- function(inSamples, filterSamples="all.other", discardSamples="non
 ##  - 'filterSamples' is either 'all.other' (default) or an array with sample names
 ##  - 'discardSamples' is either 'none' (default) or an array with sample names
 ## The two parameters 'filterSamples' and 'discardSamples' can not be used at the same time
-filterIndels <- function(inSamples, filterSamples="all.other", discardSamples="none", minIn=NA, maxOthers=0, minSeverity=3, summaryOnly=FALSE,  dbSNPfilterCommon=FALSE, TALK=FALSE){
+filterIndels <- function(inSamples, filterSamples="all.other", discardSamples="none", minIn=NA, maxOthers=0, minSeverity=3, summaryOnly=FALSE,  dbSNPfilter=FALSE, TALK=FALSE){
 
     ps <- proc.time()[3]
 
@@ -310,15 +306,15 @@ filterIndels <- function(inSamples, filterSamples="all.other", discardSamples="n
     q3opt1 <- ""
     q3opt2 <- ""
 
-    if(dbSNPfilterCommon){
-        q3opt1 <- paste(" AND snp",dbSNPversion,"common=''",sep="")
+    if(dbSNPfilter){
+        q3opt1 <- paste(" AND snp",dbSNPversion,"=''",sep="")
     }
     if(minSeverity>0){
         q3opt2 <- paste(" AND severity>=",minSeverity,sep="")
     }
 
     for(i in minIn:maxIn){
-        cat(i,"\n")
+        #cat(i,"\n")
         q3 <- paste("SELECT  * FROM ",indelSummary.table,
                     " WHERE nr_samples=",i,q3opt1,q3opt2,";",sep="")
         con <- connectToInhouseDB()
@@ -560,7 +556,7 @@ getUgcIdsWithMappingStats <- function(TALK=FALSE){
 
 
 ## Function for filtering for recessive diseases: homozygous & compound heterozygous variants
-filterRecessive <- function(inSamples, minSeverity=3, dbSNPfilterCommon=FALSE, maxFreq=0.01, TALK=FALSE, includeCompoundHeteroz=TRUE, outfile=NA){
+filterRecessive <- function(inSamples, discardSamples=NULL, minSeverity=3, dbSNPfilter=FALSE, maxFreq=0.01, TALK=FALSE, includeCompoundHeteroz=TRUE, outfile=NA){
 
     maxOthers <- 0
 
@@ -574,7 +570,7 @@ filterRecessive <- function(inSamples, minSeverity=3, dbSNPfilterCommon=FALSE, m
         maxOthers <- as.numeric(round((totalNrSamples-length(inSamples))*maxFreq))
     }
 
-    data <- filterSNPs(inSamples, minSeverity=minSeverity, dbSNPfilterCommon=dbSNPfilterCommon, maxOthers=maxOthers)
+    data <- filterSNPs(inSamples, discardSamples=discardSamples, minSeverity=minSeverity, dbSNPfilter=dbSNPfilter, maxOthers=maxOthers)
 
     nrSamples <- length(inSamples)
 
@@ -594,7 +590,7 @@ filterRecessive <- function(inSamples, minSeverity=3, dbSNPfilterCommon=FALSE, m
     }
 
     ## 2. Get shared indels
-    dataIndels <- filterIndels(inSamples, minSeverity=minSeverity, dbSNPfilterCommon=dbSNPfilterCommon, maxOthers=maxOthers)
+    dataIndels <- filterIndels(inSamples, discardSamples = discardSamples, minSeverity=minSeverity, dbSNPfilter=dbSNPfilter, maxOthers=maxOthers)
     candIndels <- NULL
     tmp <- dataIndels[dataIndels[,"heterozygous"] == 0,]
     if(!is.null(tmp)){
@@ -654,6 +650,7 @@ filterRecessive <- function(inSamples, minSeverity=3, dbSNPfilterCommon=FALSE, m
     if(!is.na(outfile)){
         cat("*********** CanvasDB filtering analysis report ***********\n", file=outfile)
         cat("**  Analysis of recessive variants in samples: ",paste(inSamples, collapse=",",sep=""),"\n", file=outfile, append=TRUE)
+        cat("**  Samples Discarded: ",paste(discardSamples, collapse=",",sep=""),"\n", file=outfile, append=TRUE)
         cat("**  Variants allowed to be detected in at most ",maxOthers," (",100*maxFreq,"%) of other samples\n", sep="", file=outfile, append=TRUE)
         cat("**********************************************************\n\n", file=outfile, append=TRUE)
         cat("-------------------  Homozygous SNPs ---------------------\n", file=outfile, append=TRUE)
@@ -691,13 +688,13 @@ filterRecessive <- function(inSamples, minSeverity=3, dbSNPfilterCommon=FALSE, m
         cat("\n\n", file=outfile, append=TRUE)
     }
 
-    return(cand)
+    #return(cand)
 
 }
 
 
 ## Function for filtering for recessive diseases: homozygous & compound heterozygous variants
-filterDominant <- function(inSamples, dbSNPfilterCommon=FALSE, maxFreq=0, minSeverity=3, TALK=FALSE, outfile=NA){
+filterDominant <- function(inSamples, dbSNPfilter=FALSE, maxFreq=0, minSeverity=3, TALK=FALSE, outfile=NA){
 
     maxOthers <- 0
 
@@ -711,7 +708,7 @@ filterDominant <- function(inSamples, dbSNPfilterCommon=FALSE, maxFreq=0, minSev
         maxOthers <- as.numeric(round((totalNrSamples-length(inSamples))*maxFreq))
     }
 
-    data <- filterSNPs(inSamples, minSeverity=minSeverity, dbSNPfilterCommon=dbSNPfilterCommon, maxOthers=maxOthers)
+    data <- filterSNPs(inSamples, minSeverity=minSeverity, dbSNPfilter=dbSNPfilter, maxOthers=maxOthers)
 
     nrSamples <- length(inSamples)
 
@@ -732,7 +729,7 @@ filterDominant <- function(inSamples, dbSNPfilterCommon=FALSE, maxFreq=0, minSev
     }
 
     ## 2. Get shared heterozygous indels
-    dataIndels <- filterIndels(inSamples, minSeverity=minSeverity, dbSNPfilterCommon=dbSNPfilterCommon, maxOthers=maxOthers)
+    dataIndels <- filterIndels(inSamples, minSeverity=minSeverity, dbSNPfilter=dbSNPfilter, maxOthers=maxOthers)
     candIndels <- NULL
     tmp <- dataIndels
     tmp <- dataIndels[dataIndels[,"heterozygous"] == 1,]
@@ -796,12 +793,12 @@ filterDominant <- function(inSamples, dbSNPfilterCommon=FALSE, maxFreq=0, minSev
 
 
 ## Function for filtering for de novo variants: Detects variants present in one sample only
-filterDenovo <- function(sample, discardSamples=NULL, minAltReads=3, minSeverity=3, dbSNPfilterCommon=TRUE,  outfile=NA){
+filterDenovo <- function(sample, discardSamples=NULL, minAltReads=3, minSeverity=3, dbSNPfilter=TRUE,  outfile=NA){
 
-    candSNPs <- filterSNPs(sample, discardSamples=discardSamples, minSeverity=minSeverity, dbSNPfilterCommon=dbSNPfilterCommon)
+    candSNPs <- filterSNPs(sample, discardSamples=discardSamples, minSeverity=minSeverity, dbSNPfilter=dbSNPfilter)
     candSNPs <- candSNPs[candSNPs[,"alt_counts"]>=minAltReads,]
 
-    candIndels <- filterIndels(sample, discardSamples=discardSamples, minSeverity=minSeverity, dbSNPfilterCommon=dbSNPfilterCommon)
+    candIndels <- filterIndels(sample, discardSamples=discardSamples, minSeverity=minSeverity, dbSNPfilter=dbSNPfilter)
     candIndels <- candIndels[as.numeric(candIndels[,"coverage"])>=minAltReads,]
 
     cat("*********** CanvasDB filtering analysis report ***********\n", file=outfile)
