@@ -394,7 +394,7 @@ annotateSNPs <- function(inputSNPs, tmpAnnotationDir=".", dbSNPversion=151, TALK
   dbDisconnect(con)
   
   dataToBeAdded <- matrix("", nrow=nrow(SNPdata), ncol=19)
-  colnames(dataToBeAdded) <- c("SNP_id","chr","pos","ref","alt","nr_samples","samples","dbSNP","dbSNPcommon","class","severity","gene","details","sift","polyphen","phylop","lrt","mut_taster","gerp")
+  colnames(dataToBeAdded) <- c("SNP_id","chr","pos","ref","alt","nr_samples","samples","dbSNP","class","severity","gene","details","sift","polyphen","phylop","lrt","mut_taster","gerp")
   dataToBeAdded[, c("SNP_id","chr","pos","ref","alt","nr_samples","samples")] <- as.matrix(SNPdata[,c("SNP_id","chr","pos","ref","alt","nr_samples","samples")])
   
   
@@ -607,7 +607,7 @@ annotateIndels <- function(inputIndels, tmpAnnotationDir=".", dbSNPversion=151, 
   dbDisconnect(con)
   
   dataToBeAdded <- matrix("", nrow=nrow(dataToBeAnnotated), ncol=16)
-  colnames(dataToBeAdded) <- c("indel_id","chr","start","end","ref","alt","type","size","nr_samples","samples","dbSNP","dbSNPcommon","class","severity","gene","details")
+  colnames(dataToBeAdded) <- c("indel_id","chr","start","end","ref","alt","type","size","nr_samples","samples","dbSNP","class","severity","gene","details")
   dataToBeAdded[, c("indel_id","chr","start","end","ref","alt")] <- as.matrix(dataToBeAnnotated[,c("indel_id","chr","start","end","ref","alt")])
   
   ## Step 1. Filter against dbSNP and dbSNPCommon
@@ -620,14 +620,14 @@ annotateIndels <- function(inputIndels, tmpAnnotationDir=".", dbSNPversion=151, 
     dataToBeAdded[match(tmp[,"indel_id"],dataToBeAdded[,"indel_id"]),"dbSNP"] <- tmp[,"name"]
   }
   
-  con <- connectToInhouseDB()
-  query <- paste("SELECT t1.indel_id,t2.name FROM ",tmpIndel.table," as t1, ",annotTables[["dbsnpCommonIndels"]]," as t2 WHERE t1.indel_id=t2.indel_id;", sep="")
-  tmp <- dbGetQuery_E(con, query, TALK=TALK)
-  dbDisconnect(con)
-  if(nrow(tmp)>0){
-    dataToBeAdded[match(tmp[,"indel_id"],dataToBeAdded[,"indel_id"]),"dbSNP"] <- tmp[,"name"]
-    dataToBeAdded[match(tmp[,"indel_id"],dataToBeAdded[,"indel_id"]),"dbSNPcommon"] <- tmp[,"name"]
-  }
+#  con <- connectToInhouseDB()
+#  query <- paste("SELECT t1.indel_id,t2.name FROM ",tmpIndel.table," as t1, ",annotTables[["dbsnpCommonIndels"]]," as t2 WHERE t1.indel_id=t2.indel_id;", sep="")
+#  tmp <- dbGetQuery_E(con, query, TALK=TALK)
+#  dbDisconnect(con)
+#  if(nrow(tmp)>0){
+#    dataToBeAdded[match(tmp[,"indel_id"],dataToBeAdded[,"indel_id"]),"dbSNP"] <- tmp[,"name"]
+#    dataToBeAdded[match(tmp[,"indel_id"],dataToBeAdded[,"indel_id"]),"dbSNPcommon"] <- tmp[,"name"]
+#  }
   
   cat(proc.time()[3] - ps,"s\n");
   
