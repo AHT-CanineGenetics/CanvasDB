@@ -9,7 +9,7 @@
 ##
 ############################################################################
 
-rootDir <- "/Volumes/Data/canvasDB/" # Path to this directory, where R code is located
+rootDir <- "/Users/Ellen/Git/CanvasDB/" # Path to this directory, where R code is located
 
 ## Load functions for conftructing an canvasDB
 source(paste(rootDir,"canvasDB_config.R",sep=""))
