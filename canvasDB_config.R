@@ -16,8 +16,8 @@ if(!file.exists(tmpfileDir)){
 
 #indbDatabaseName <- "canvasdb_test"
 #annotationDatabaseName <- "canvasdb_test_annot_hg19"
-indbDatabaseName <- "es_canvasdb"
-annotationDatabaseName <- "es_canvasdb_annot_cf3"
+indbDatabaseName <- "canvasdb"
+annotationDatabaseName <- "canvasdb_annot_cf3"
 
 
 #ANNOVARpath <- "/Volumes/Data/tools/annovar/annotate_variation.pl" ## Add path to ANNOVAR executable
@@ -26,10 +26,11 @@ ANNOVARpath <- "/Users/Ellen/Git/CanvasDB/annovar/annotate_variation.pl" ## Add 
 ANNOVARpathDB <- "/Users/Ellen/Git/CanvasDB/annovar/dogdb/" ## Add path to ANNOVAR annotation database
 
 VEPpath <- "/Users/Ellen/Git/ensembl-vep/vep"
+VEPpath <- paste("docker run -it -v /Users/Ellen/DockerData/vep_data:/opt/vep/.vep -v ", tmpfileDir, ":/data/ ensemblorg/ensembl-vep ./vep",sep="")
 
 
 dbSNPversion <- 151
-eVersion <- 92
+eVersion <- 95
 
 mysqlConfigFile <- ".my.cnf"  # File containing MySQL user info
 

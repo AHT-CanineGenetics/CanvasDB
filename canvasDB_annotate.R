@@ -122,12 +122,14 @@ setupAnnotationDBtables <- function(tmpAnnotationDir=tmpfileDir, dbSNPversion=13
 
 }
 
-addVEPAnnotation <- function(tmpAnnotationDir=tmpfileDir, dbSNPversion=137, eVersion=92, TALK=FALSE){
+addVEPAnnotation <- function(tmpAnnotationDir=tmpfileDir, dbSNPversion=dbSNPversion, eVersion=eVersion, TALK=FALSE){
   
   ## Annotate SNPS with VEP if not already in database...
   cat("Importing VEP Annotation into database...\n")
   tmpDatafile <- paste(tmpAnnotationDir,"/tmp_variantsToBeAnnotated.vcf",sep="")
   tmpVEPfile <- paste(tmpAnnotationDir,"/tmp_variantsAnnotated_vep",eVersion,".txt",sep="")
+  dockerDatafile <- "/data/tmp_variantsToBeAnnotated.vcf"
+  dockerVEPfile <- paste("/data/tmp_variantsAnnotated_vep",eVersion,".txt",sep="")
   
   dbSNP.table <- annotTables[["dbsnp"]]
   con <- connectToInhouseDB()
@@ -147,12 +149,16 @@ addVEPAnnotation <- function(tmpAnnotationDir=tmpfileDir, dbSNPversion=137, eVer
   
   write.table(SNPdata, file=tmpDatafile, sep="\t", quote=FALSE, row.names=FALSE, col.names=FALSE)
   
-  vepCommand <- paste("perl ", VEPpath, " --cache --offline --species canis_familiaris --format vcf ",
+#  vepCommand <- paste("perl ", VEPpath, " --cache --offline --species canis_familiaris --format vcf ",
+#                      "--force_overwrite --no_stats --everything --no_headers --fork 4 ",
+#                      "--input_file ",tmpDatafile,
+#                      "--output_file ", tmpVEPfile)
+  vepCommand <- paste(VEPpath, " --cache --offline --species canis_familiaris --format vcf ",
                       "--force_overwrite --no_stats --everything --no_headers --fork 4 ",
-                      "--input_file ",tmpDatafile,
-                      "--output_file ", tmpVEPfile)
+                      "--input_file ",dockerDatafile,
+                      "--output_file ", dockerVEPfile)
   print(vepCommand)
-  system(vepCommand)
+#  system(vepCommand)
   
   vepSNP.table <- annotTables[["vepSNP"]]
   
