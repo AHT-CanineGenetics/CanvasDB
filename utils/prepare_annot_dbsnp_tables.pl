@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 use warnings;
 use strict;
 
@@ -20,6 +20,9 @@ open(IN_FILE,$in_file) or die "Can't open ".$in_file."\n";
 while(!eof(IN_FILE)){
 
     my $line = <IN_FILE>;
+  next if ($line =~ /^#/);
+  
+  print $line;
 
     if($line =~ /^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+).*$/){
 		my $chr=$2;
@@ -152,6 +155,7 @@ while(!eof(IN_FILE)){
 					print "$chr|$end|$refUCSC|$alt3\t$rsId\n";
 				}
 			}
+			break;
 		}
 	}
 }
