@@ -31,7 +31,7 @@ snpEffDB <- "CanFam3.1.86"
 siftDB <- "CanFam3.1.83"
 
 VEPpath <- "/Users/Ellen/Git/ensembl-vep/vep"
-VEPpath <- paste("docker run -it -v /Users/Ellen/DockerData/vep_data:/opt/vep/.vep -v ", tmpfileDir, ":/data/ ensemblorg/ensembl-vep ./vep",sep="")
+VEPpath <- paste("docker run -v /Users/Ellen/DockerData/vep_data:/opt/vep/.vep -v ", tmpfileDir, ":/data/ ensemblorg/ensembl-vep ./vep",sep="")
 
 dbSNPversion <- 151
 eVersion <- 95
