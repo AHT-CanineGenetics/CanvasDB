@@ -221,20 +221,75 @@ addSnpEffAnnotation <- function(tmpAnnotationDir=tmpfileDir, dbSNPversion=151, s
   
 }
 
-addVEPAnnotation <- function(tmpAnnotationDir=tmpfileDir, dbSNPversion=dbSNPversion, eVersion=eVersion, TALK=FALSE){
+addVEPAnnotation <- function(tmpAnnotationDir=tmpfileDir, eVer=eVersion, TALK=FALSE){
   
   ## Annotate SNPS with VEP if not already in database...
   cat("Importing VEP Annotation into database...\n")
-  tmpDatafile <- paste(tmpAnnotationDir,"/tmp_variantsToBeAnnotated.vcf",sep="")
-  tmpVEPfile <- paste(tmpAnnotationDir,"/tmp_variantsAnnotated_vep",eVersion,".txt",sep="")
-  dockerDatafile <- "/data/tmp_variantsToBeAnnotated.vcf"
-  dockerVEPfile <- paste("/data/tmp_variantsAnnotated_vep",eVersion,".txt",sep="")
   
   dbSNP.table <- annotTables[["dbsnp"]]
-  con <- connectToInhouseDB()
-  query <- paste("SELECT SNP_id FROM ",dbSNP.table,";",sep="")
-  inputSNPs <- dbGetQuery_E(con, query, TALK=TALK)
+  vepSNP.table <- annotTables[["vepSNP"]]
+  sumSNP.table <- dbTables[["SNP.summary"]]
+  
+  updateDbSnps <- FALSE
+  
+  con <- connectToInhouseDB(annotationDatabaseName)
+  query <- paste("SHOW TABLES LIKE 'annot_vep",eVer,"_single';",sep="")
+  tmp <- dbGetQuery_E(con, query, TALK=TALK)
+  if(nrow(tmp) == 0){
+    updateDbSnps <- TRUE
+    query <- paste("CREATE TABLE IF NOT EXISTS ",vepSNP.table,
+                   "(SNP_id varchar(20), ",
+                   "position varchar(20), ",
+                   "ref_allele varchar(5), ",
+                   "gene varchar(20), ",
+                   "feature varchar(20), ",
+                   "feature_type varchar(20), ",
+                   "consequence varchar(50), ",
+                   "cDNA_pos varchar(5), ",
+                   "cds_pos varchar(5), ",
+                   "prot_pos varchar(5), ",
+                   "amino_acids varchar(20), ",
+                   "codons varchar(20), ",
+                   "existing_var varchar(20), ",
+                   "annotation text, ",
+                   "PRIMARY KEY(SNP_id)",
+                   ") ENGINE=",mysqlEngine," DEFAULT CHARSET=latin1",sep="")
+    tmp <- dbGetQuery_E(con,query,TALK=TALK)
+  }
   dbDisconnect(con)
+  
+  if (updateDbSnps){
+    cat("Annotating dbSNP entries with VEP annotation...\n")
+    con <- connectToInhouseDB()
+    query <- paste("SELECT SNP_id FROM ",dbSNP.table,";",sep="")
+    dbSNPs <- dbGetQuery_E(con, query, TALK=TALK)
+    dbDisconnect(con)
+    
+    runVep(inputSNPs=dbSNPs, eVer=eVer)
+  }
+  
+  cat("Checking for un-annotated SNPs in the summary table.....")
+  
+  con <- connectToInhouseDB()
+  query <- paste("SELECT SNP_id FROM ",vepSNP.table,";",sep="")
+  okSNPs <- dbGetQuery_E(con, query, TALK=TALK)
+  query2 <- paste("SELECT SNP_id FROM ",sumSNP.table,";",sep="")
+  summarySNPs <- dbGetQuery_E(con, query2, TALK=TALK)
+  dbDisconnect(con)
+  
+  vepSNPs <- subset(summarySNPs, !(SNP_id %in% okSNPs$SNP_id))
+  cat(paste(" ", nrow(vepSNPs), "\n" ,sep=""))
+  if(nrow(vepSNPs) > 0){
+    runVep(inputSNPs=vepSNPs, eVer=eVer)
+  }
+}
+
+runVEP <- function(inputSNPs, tmpAnnotationDir=tmpfileDir, eVer=eVersion, TALK=FALSE){
+  
+  tmpDatafile <- paste(tmpAnnotationDir,"/tmp_variantsToBeAnnotated.vcf",sep="")
+  tmpVEPfile <- paste(tmpAnnotationDir,"/tmp_variantsAnnotated_vep",eVer,".txt",sep="")
+  dockerDatafile <- "/data/tmp_variantsToBeAnnotated.vcf"
+  dockerVEPfile <- paste("/data/tmp_variantsAnnotated_vep",eVer,".txt",sep="")
   
   inputSNPids <- as.character(inputSNPs[,"SNP_id"])
   inputSNPidsSplit <- strsplit(inputSNPids,"\\|")
@@ -248,50 +303,22 @@ addVEPAnnotation <- function(tmpAnnotationDir=tmpfileDir, dbSNPversion=dbSNPvers
   
   write.table(SNPdata, file=tmpDatafile, sep="\t", quote=FALSE, row.names=FALSE, col.names=FALSE)
   
-#  vepCommand <- paste("perl ", VEPpath, " --cache --offline --species canis_familiaris --format vcf ",
-#                      "--force_overwrite --no_stats --everything --no_headers --fork 4 ",
-#                      "--input_file ",tmpDatafile,
-#                      "--output_file ", tmpVEPfile)
   vepCommand <- paste(VEPpath, " --cache --offline --species canis_familiaris --format vcf ",
                       "--force_overwrite --no_stats --everything --no_headers --fork 4 ",
                       "--input_file ",dockerDatafile,
                       "--output_file ", dockerVEPfile)
   print(vepCommand)
-  system(vepCommand)
+ # system(vepCommand)
   
-  vepSNP.table <- annotTables[["vepSNP"]]
+#  con <- connectToInhouseDB()
   
-  con <- connectToInhouseDB()
+#  query <- paste("LOAD DATA LOCAL INFILE '",tmpVEPfile,"' REPLACE INTO TABLE ",vepSNP.table,";",sep="")
+#  tmp <- dbGetQuery_E(con, query, TALK=TALK)
   
-  query <- paste("DROP TABLE IF EXISTS ",vepSNP.table, sep="")
-  tmp <- dbGetQuery_E(con, query, TALK=TALK)
+#  dbDisconnect(con)
   
-  query <- paste("CREATE TABLE IF NOT EXISTS ",vepSNP.table,
-                 "(SNP_id varchar(20), ",
-                 "position varchar(20), ",
-                 "ref_allele varchar(5), ",
-                 "gene varchar(20), ",
-                 "feature varchar(20), ",
-                 "feature_type varchar(20), ",
-                 "consequence varchar(50), ",
-                 "cDNA_pos varchar(5), ",
-                 "cds_pos varchar(5), ",
-                 "prot_pos varchar(5), ",
-                 "amino_acids varchar(20), ",
-                 "codons varchar(20), ",
-                 "existing_var varchar(20), ",
-                 "annotation text, ",
-                 "PRIMARY KEY(SNP_id)",
-                 ") ENGINE=",mysqlEngine," DEFAULT CHARSET=latin1",sep="")
-  tmp <- dbGetQuery_E(con,query,TALK=TALK)
-  
-  query <- paste("LOAD DATA LOCAL INFILE '",tmpVEPfile,"' REPLACE INTO TABLE ",vepSNP.table,";",sep="")
-  tmp <- dbGetQuery_E(con, query, TALK=TALK)
-  
-  dbDisconnect(con)
   
 }
-
 
 
 
