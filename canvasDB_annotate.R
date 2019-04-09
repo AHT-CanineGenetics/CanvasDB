@@ -35,7 +35,7 @@ setupAnnotationDBtables <- function(tmpAnnotationDir=tmpfileDir, dbSNPversion=15
   
   if(nrow(tmp) == 0){
     
-    cat("Imporing dbSNP ids into database...\n")
+    cat("Importing dbSNP ids into database...\n")
     
     dbsnpFile <- paste(tmpAnnotationDir,"cf3_snp",dbSNPversion,"_parsed.txt",sep="")
     
@@ -265,7 +265,7 @@ addVEPAnnotation <- function(tmpAnnotationDir=tmpfileDir, eVer=eVersion, TALK=FA
     dbSNPs <- dbGetQuery_E(con, query, TALK=TALK)
     dbDisconnect(con)
     
-    runVep(inputSNPs=dbSNPs, eVer=eVer)
+    runVEP(inputSNPs=dbSNPs, eVer=eVer)
   }
   
   cat("Checking for un-annotated SNPs in the summary table.....")
@@ -280,7 +280,7 @@ addVEPAnnotation <- function(tmpAnnotationDir=tmpfileDir, eVer=eVersion, TALK=FA
   vepSNPs <- subset(summarySNPs, !(SNP_id %in% okSNPs$SNP_id))
   cat(paste(" ", nrow(vepSNPs), "\n" ,sep=""))
   if(nrow(vepSNPs) > 0){
-    runVep(inputSNPs=vepSNPs, eVer=eVer)
+    runVEP(inputSNPs=vepSNPs, eVer=eVer)
   }
 }
 
@@ -290,6 +290,7 @@ runVEP <- function(inputSNPs, tmpAnnotationDir=tmpfileDir, eVer=eVersion, TALK=F
   tmpVEPfile <- paste(tmpAnnotationDir,"/tmp_variantsAnnotated_vep",eVer,".txt",sep="")
   dockerDatafile <- "/data/tmp_variantsToBeAnnotated.vcf"
   dockerVEPfile <- paste("/data/tmp_variantsAnnotated_vep",eVer,".txt",sep="")
+  vepSNP.table <- annotTables[["vepSNP"]]
   
   inputSNPids <- as.character(inputSNPs[,"SNP_id"])
   inputSNPidsSplit <- strsplit(inputSNPids,"\\|")
@@ -308,16 +309,15 @@ runVEP <- function(inputSNPs, tmpAnnotationDir=tmpfileDir, eVer=eVersion, TALK=F
                       "--input_file ",dockerDatafile,
                       "--output_file ", dockerVEPfile)
   print(vepCommand)
- # system(vepCommand)
+  system(vepCommand)
   
-#  con <- connectToInhouseDB()
+  con <- connectToInhouseDB()
   
-#  query <- paste("LOAD DATA LOCAL INFILE '",tmpVEPfile,"' REPLACE INTO TABLE ",vepSNP.table,";",sep="")
-#  tmp <- dbGetQuery_E(con, query, TALK=TALK)
+  query <- paste("LOAD DATA LOCAL INFILE '",tmpVEPfile,"' REPLACE INTO TABLE ",vepSNP.table,";",sep="")
+  tmp <- dbGetQuery_E(con, query, TALK=TALK)
   
-#  dbDisconnect(con)
-  
-  
+  dbDisconnect(con)
+
 }
 
 
