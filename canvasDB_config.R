@@ -25,12 +25,10 @@ annotationDatabaseName <- "canvasdb_annot_cf3"
 ANNOVARpath <- "/home/eschofield/local/src/annovar/annotate_variation.pl" ## Add path to ANNOVAR executable
 ANNOVARpathDB <- "/home/eschofield/local/src/annovar/dogdb/" ## Add path to ANNOVAR annotation database
 
-VEPpath <- "/opt/vep/vep"
 snpEffPath <- "/home/eschofield/local/src/snpEff"
 snpEffDB <- "CanFam3.1.86"
 siftDB <- "CanFam3.1.83"
 
-VEPpath <- "/Users/Ellen/Git/ensembl-vep/vep"
 VEPpath <- paste("docker run -v /Users/Ellen/DockerData/vep_data:/opt/vep/.vep -v ", tmpfileDir, ":/data/ ensemblorg/ensembl-vep ./vep",sep="")
 
 dbSNPversion <- 151
@@ -49,6 +47,8 @@ annotTables[["dbsnpIndels"]] <- paste(annotationDatabaseName,".annot_snp",dbSNPv
 #annotTables[["dbsnpCommonIndels"]] <- paste(annotationDatabaseName,".annot_snp",dbSNPversion,"_indels_common",sep="")
 annotTables[["vepSNP"]] <- paste(annotationDatabaseName,".annot_vep",eVersion,"_single",sep="")
 annotTables[["vepIndels"]] <- paste(annotationDatabaseName,".annot_vep",eVersion,"_indels",sep="")
+
+annotTables[["retNetGenes"]] <- paste(annotationDatabaseName,".retnet_genes" ,sep="")
 
 
 dbTables <- list()

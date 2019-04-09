@@ -35,7 +35,7 @@ setupAnnotationDBtables <- function(tmpAnnotationDir=tmpfileDir, dbSNPversion=15
   
   if(nrow(tmp) == 0){
     
-    cat("Imporing dbSNP ids into database...\n")
+    cat("Importing dbSNP ids into database...\n")
     
     dbsnpFile <- paste(tmpAnnotationDir,"cf3_snp",dbSNPversion,"_parsed.txt",sep="")
     

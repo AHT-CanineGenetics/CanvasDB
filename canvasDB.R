@@ -17,6 +17,7 @@ source(paste(rootDir,"canvasDB_parse.R",sep=""))
 source(paste(rootDir,"canvasDB_annotate.R",sep=""))
 source(paste(rootDir,"canvasDB_setup.R",sep=""))
 source(paste(rootDir,"canvasDB_filter.R",sep=""))
+source(paste(rootDir,"canvasDB_utils.R",sep=""))
 
 ## Load plugins (if available)
 if(file.exists(paste(rootDir,"plugins/canvasDB_homozmap.R",sep="")))
