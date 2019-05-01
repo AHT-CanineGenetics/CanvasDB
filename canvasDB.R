@@ -118,7 +118,11 @@ updateSNPsummaryTable <- function(SNPsToBeUpdated, SNPsToBeAdded, TALK=FALSE){
     if(nrSNPsToBeAdded>0){
         cat(" ",nrow(SNPsToBeAdded)," new entries to be added...\n",sep="")
 
-        dataToBeAdded <- annotateSNPs(SNPsToBeAdded, tmpAnnotationDir=tmpfileDir, dbSNPversion=dbSNPversion)
+        # dataToBeAdded <- annotateSNPs(SNPsToBeAdded, tmpAnnotationDir=tmpfileDir, dbSNPversion=dbSNPversion)
+        
+        dataToBeAdded <- matrix("", nrow=nrow(SNPsToBeAdded), ncol=14)
+        colnames(dataToBeAdded) <- c("SNP_id","chr","pos","ref","alt","nr_samples","samples","dbSNP","class","severity","gene","details","sift","polyphen")
+        dataToBeAdded[, c("SNP_id","chr","pos","ref","alt","nr_samples","samples")] <- as.matrix(SNPsToBeAdded[,c("SNP_id","chr","pos","ref","alt","nr_samples","samples")])
 
         cat("  - Loading annotated SNPs into summary table...")
         ps <- proc.time()[3]
