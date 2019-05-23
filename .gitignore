@@ -1,3 +1,6 @@
 
 .my.cnf
 tmpfile_dir/*
+utils/.DS_Store
+.DS_Store
+.my.cnf
