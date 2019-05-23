@@ -9,7 +9,7 @@
 ##
 ############################################################################
 
-rootDir <- "/home/eschofield/git/CanvasDB/" # Path to this directory, where R code is located
+rootDir <- "/Users/Ellen/Git/CanvasDB/" # Path to this directory, where R code is located
 
 ## Load functions for conftructing an canvasDB
 source(paste(rootDir,"canvasDB_config.R",sep=""))
@@ -118,12 +118,8 @@ updateSNPsummaryTable <- function(SNPsToBeUpdated, SNPsToBeAdded, TALK=FALSE){
     if(nrSNPsToBeAdded>0){
         cat(" ",nrow(SNPsToBeAdded)," new entries to be added...\n",sep="")
 
-        # dataToBeAdded <- annotateSNPs(SNPsToBeAdded, tmpAnnotationDir=tmpfileDir, dbSNPversion=dbSNPversion)
+        dataToBeAdded <- annotateSNPs(SNPsToBeAdded, tmpAnnotationDir=tmpfileDir, dbSNPversion=dbSNPversion)
         
-        dataToBeAdded <- matrix("", nrow=nrow(SNPsToBeAdded), ncol=14)
-        colnames(dataToBeAdded) <- c("SNP_id","chr","pos","ref","alt","nr_samples","samples","dbSNP","class","severity","gene","details","sift","polyphen")
-        dataToBeAdded[, c("SNP_id","chr","pos","ref","alt","nr_samples","samples")] <- as.matrix(SNPsToBeAdded[,c("SNP_id","chr","pos","ref","alt","nr_samples","samples")])
-
         cat("  - Loading annotated SNPs into summary table...")
         ps <- proc.time()[3]
 
@@ -269,7 +265,7 @@ updateIndelSummaryTable <- function(indelsToBeUpdated, indelsToBeAdded, TALK=FAL
 
 
 ## Function for adding SNP and indel data to the canvasDB. Samples are added one by one.
-addVariantData <- function(SNP.file, canvasId, seq.platform, library.type, read.type, fileFormat, indel.file="", capture.method="", instrument.name="unknown", sampleName="", gender="", geographic.location="", phenotypes="", comments="", principal.investigator="", totalReads="", readsOnTarget="", date="", TALK=FALSE){
+addVariantData <- function(SNP.file, canvasId, seq.platform, library.type, read.type, fileFormat, indel.file="", capture.method="", instrument.name="unknown", sampleName="", gender="", phenotypes="", comments="", principal.investigator="", totalReads="", readsOnTarget="", date="", TALK=FALSE){
 
     cat("Processing sample: ",canvasId,"\n",sep="")
 
@@ -310,7 +306,7 @@ addVariantData <- function(SNP.file, canvasId, seq.platform, library.type, read.
         stop()
     }
 
-    query <- paste("INSERT INTO ",sample.table," (canvas_id, gender, sample_name, geographic_location, phenotypes, comments, principal_investigator) VALUES ('",canvasId,"','",gender,"','",sampleName,"','",geographic.location,"','",phenotypes,"','",comments,"','",principal.investigator,"');",sep="")
+    query <- paste("INSERT INTO ",sample.table," (canvas_id, gender, sample_name, phenotypes, comments, principal_investigator) VALUES ('",canvasId,"','",gender,"','",sampleName,"','",phenotypes,"','",comments,"','",principal.investigator,"');",sep="")
 
     tmp <- dbGetQuery_E(con,query,TALK=TALK)
 
@@ -673,7 +669,6 @@ batchImport <- function(infile="dummy_exomes.txt", nlines=NA, TALK=FALSE){
         pi <- data[i,"principal.investigator"]
         instrumentName <- data[i,"instrument.name"]
         gender <- data[i,"gender"]
-        geoLocation <- data[i,"geographic.location"]
         phenotypes <- data[i,"phenotypes"]
         comments <- data[i,"comments"]
         SNPfile <- data[i,"SNP.file"]
@@ -689,7 +684,7 @@ batchImport <- function(infile="dummy_exomes.txt", nlines=NA, TALK=FALSE){
         else{
             if(file.exists(SNPfile)){
                 if((indelFile=="") || file.exists(indelFile)){
-                    variantsForSample <- addVariantData(SNPfile, canvasId, seqPlatform, libraryType, readType, fileFormat, indel.file=indelFile, capture.method=captureMethod, instrument.name=instrumentName, sampleName=sampleName, gender=gender, geographic.location=geoLocation, phenotypes=phenotypes, comments=comments, principal.investigator=pi, totalReads=totalReads, readsOnTarget=readsOnTarget, date=date, TALK=TALK)
+                    variantsForSample <- addVariantData(SNPfile, canvasId, seqPlatform, libraryType, readType, fileFormat, indel.file=indelFile, capture.method=captureMethod, instrument.name=instrumentName, sampleName=sampleName, gender=gender, phenotypes=phenotypes, comments=comments, principal.investigator=pi, totalReads=totalReads, readsOnTarget=readsOnTarget, date=date, TALK=TALK)
 
                     cat("Updating SNP/indel datastructures...")
                     ps <- proc.time()[3]

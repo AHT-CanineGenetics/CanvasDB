@@ -227,8 +227,10 @@ addVEPAnnotation <- function(tmpAnnotationDir=tmpfileDir, eVer=eVersion, TALK=FA
   cat("Importing VEP Annotation into database...\n")
   
   dbSNP.table <- annotTables[["dbsnp"]]
+  dbSNPIndel.table <- annotTables[["dbsnpIndels"]]
   vepSNP.table <- annotTables[["vepSNP"]]
   sumSNP.table <- dbTables[["SNP.summary"]]
+  sumIndel.table <- dbTables[["indel.summary"]]
   
   updateDbSnps <- FALSE
   
@@ -241,8 +243,8 @@ addVEPAnnotation <- function(tmpAnnotationDir=tmpfileDir, eVer=eVersion, TALK=FA
                    "(SNP_id varchar(20), ",
                    "position varchar(20), ",
                    "ref_allele varchar(5), ",
-                   "gene varchar(20), ",
-                   "feature varchar(20), ",
+                   "cf_gene varchar(20), ",
+                   "cf_feat varchar(20), ",
                    "feature_type varchar(20), ",
                    "consequence varchar(50), ",
                    "cDNA_pos varchar(5), ",
@@ -250,9 +252,16 @@ addVEPAnnotation <- function(tmpAnnotationDir=tmpfileDir, eVer=eVersion, TALK=FA
                    "prot_pos varchar(5), ",
                    "amino_acids varchar(20), ",
                    "codons varchar(20), ",
-                   "existing_var varchar(20), ",
+                   "dbsnp varchar(20), ",
+                   "cf_symbol varchar(20), ",
+                   "severity int(1), ",
+                   "biotype varchar(50), ",
+                   "impact varchar(50), ",
+                   "sift_text varchar(50), ",
+                   "sift_val decimal(5,3) default NULL, ", 
                    "annotation text, ",
-                   "PRIMARY KEY(SNP_id)",
+                   "hs_gene varchar(20), ",
+                   "PRIMARY KEY(SNP_id, cf_feat)",
                    ") ENGINE=",mysqlEngine," DEFAULT CHARSET=latin1",sep="")
     tmp <- dbGetQuery_E(con,query,TALK=TALK)
   }
@@ -263,25 +272,36 @@ addVEPAnnotation <- function(tmpAnnotationDir=tmpfileDir, eVer=eVersion, TALK=FA
     con <- connectToInhouseDB()
     query <- paste("SELECT SNP_id FROM ",dbSNP.table,";",sep="")
     dbSNPs <- dbGetQuery_E(con, query, TALK=TALK)
+    query <- paste("SELECT SNP_id FROM ",dbSNPIndel.table,";",sep="")
+    dbSNPIndels <- dbGetQuery_E(con, query, TALK=TALK)
     dbDisconnect(con)
     
     runVEP(inputSNPs=dbSNPs, eVer=eVer)
+    runVEP(inputSNPs=dbSNPIndels, eVer=eVer)
   }
   
-  cat("Checking for un-annotated SNPs in the summary table.....")
+  cat("Checking for un-annotated SNPs/Indels in the summary tables.....")
   
   con <- connectToInhouseDB()
   query <- paste("SELECT SNP_id FROM ",vepSNP.table,";",sep="")
   okSNPs <- dbGetQuery_E(con, query, TALK=TALK)
+  
   query2 <- paste("SELECT SNP_id FROM ",sumSNP.table,";",sep="")
   summarySNPs <- dbGetQuery_E(con, query2, TALK=TALK)
+  
+  query3 <- paste("SELECT indel_id as SNP_id FROM ",sumIndel.table,";",sep="")
+  summaryIndels <- dbGetQuery_E(con, query3, TALK=TALK)
   dbDisconnect(con)
   
   vepSNPs <- subset(summarySNPs, !(SNP_id %in% okSNPs$SNP_id))
-  cat(paste(" ", nrow(vepSNPs), "\n" ,sep=""))
+  vepIndels <- subset(summaryIndels, !(SNP_id %in% okSNPs$SNP_id))
+  
+  cat(paste(": SNPS=", nrow(vepSNPs), "; Indels=", nrow(vepIndels), "\n" ,sep=""))
   if(nrow(vepSNPs) > 0){
     runVEP(inputSNPs=vepSNPs, eVer=eVer)
+    runVEP(inputSNPs=vepIndels, eVer=eVer)
   }
+  
 }
 
 runVEP <- function(inputSNPs, tmpAnnotationDir=tmpfileDir, eVer=eVersion, TALK=FALSE){
@@ -311,10 +331,17 @@ runVEP <- function(inputSNPs, tmpAnnotationDir=tmpfileDir, eVer=eVersion, TALK=F
   print(vepCommand)
   system(vepCommand)
   
+  tmpfile <- paste(tmpAnnotationDir,"/tmp_vep.txt", sep="")
+  system(paste("perl ",utilsDir, "/parse_vep_output.pl ",tmpVEPfile," > ",tmpfile,sep=""))
+  variantFunctions <- read.table(tmpfile, header=FALSE, as.is=TRUE, sep="\t", comment.char="#")
+  
   con <- connectToInhouseDB()
   
-  query <- paste("LOAD DATA LOCAL INFILE '",tmpVEPfile,"' REPLACE INTO TABLE ",vepSNP.table,";",sep="")
+  query <- paste("LOAD DATA LOCAL INFILE '",tmpfile,"' REPLACE INTO TABLE ",vepSNP.table," (SNP_id, position, ref_allele, cf_gene, cf_feat, feature_type, consequence, cDNA_pos, cds_pos, prot_pos, amino_acids, codons, dbsnp, cf_symbol, severity, biotype, impact, sift_text, sift_val, annotation);",sep="")
   tmp <- dbGetQuery_E(con, query, TALK=TALK)
+  
+  file.remove(tmpVEPfile)
+  file.remove(tmpfile)
   
   dbDisconnect(con)
 
@@ -420,9 +447,12 @@ annotateSNPs <- function(inputSNPs, tmpAnnotationDir=".", dbSNPversion=151, TALK
   
   dbDisconnect(con)
   
-  dataToBeAdded <- matrix("", nrow=nrow(SNPdata), ncol=19)
-  colnames(dataToBeAdded) <- c("SNP_id","chr","pos","ref","alt","nr_samples","samples","dbSNP","class","severity","gene","details","sift","polyphen","phylop","lrt","mut_taster","gerp")
+#  dataToBeAdded <- matrix("", nrow=nrow(SNPdata), ncol=14)
+#  colnames(dataToBeAdded) <- c("SNP_id","chr","pos","ref","alt","nr_samples","samples","dbSNP","class","severity","gene","details","sift","polyphen")#  dataToBeAdded[, c("SNP_id","chr","pos","ref","alt","nr_samples","samples")] <- as.matrix(SNPdata[,c("SNP_id","chr","pos","ref","alt","nr_samples","samples")])
+  dataToBeAdded <- matrix("", nrow=nrow(SNPdata), ncol=8)
+  colnames(dataToBeAdded) <- c("SNP_id","chr","pos","ref","alt","nr_samples","samples","dbSNP")
   dataToBeAdded[, c("SNP_id","chr","pos","ref","alt","nr_samples","samples")] <- as.matrix(SNPdata[,c("SNP_id","chr","pos","ref","alt","nr_samples","samples")])
+  
   
   
   ## Step 1. Filter against dbSNP and dbSNPCommon
@@ -436,92 +466,75 @@ annotateSNPs <- function(inputSNPs, tmpAnnotationDir=".", dbSNPversion=151, TALK
     dataToBeAdded[match(tmp[,"SNP_id"],dataToBeAdded[,"SNP_id"]),"dbSNP"] <- tmp[,"name"]
   }
   
-#  con <- connectToInhouseDB()
-#  query <- paste("SELECT t1.SNP_id,t2.name FROM ",tmpSNP.table," as t1, ",annotTables[["dbsnpCommon"]]," as t2 WHERE t1.SNP_id=t2.SNP_id;", sep="")
-#  tmp <- dbGetQuery_E(con, query, TALK=TALK)
-#  dbDisconnect(con)
-#  if(nrow(tmp)>0){
-#    dataToBeAdded[match(tmp[,"SNP_id"],dataToBeAdded[,"SNP_id"]),"dbSNP"] <- tmp[,"name"]
-#    dataToBeAdded[match(tmp[,"SNP_id"],dataToBeAdded[,"SNP_id"]),"dbSNPcommon"] <- tmp[,"name"]
-#  }
-  
   cat(proc.time()[3] - ps,"s\n");
   
   
-  ## Step 2. Annotate exonic variants against score table
-  cat("  - Annotating SNPs with SNP scores...",sep="")
-  con <- connectToInhouseDB()
-#  query <- paste("SELECT t1.SNP_id,t2.sift,t2.polyphen,t2.phylop,t2.lrt,t2.mut_taster,t2.gerp FROM ",tmpSNP.table," as t1, ",annotTables[["score"]]," as t2 WHERE t1.SNP_id=t2.SNP_id;", sep="")
-  query <- paste("SELECT t1.SNP_id,t2.sift FROM ",tmpSNP.table," as t1, ",annotTables[["score"]]," as t2 WHERE t1.SNP_id=t2.SNP_id;", sep="")
-  cat(query)
-  tmp <- dbGetQuery_E(con, query, TALK=TALK)
-  dbDisconnect(con)
-  if(nrow(tmp)>0){
-    idsToBeAdded <- match(tmp[,"SNP_id"],dataToBeAdded[,"SNP_id"])
-    dataToBeAdded[idsToBeAdded,"sift"] <- tmp[,"sift"]
-#    dataToBeAdded[idsToBeAdded,"polyphen"] <- tmp[,"polyphen"]
-#    dataToBeAdded[idsToBeAdded,"phylop"] <- tmp[,"phylop"]
-#    dataToBeAdded[idsToBeAdded,"lrt"] <- tmp[,"lrt"]
-#    dataToBeAdded[idsToBeAdded,"mut_taster"] <- tmp[,"mut_taster"]
-#    dataToBeAdded[idsToBeAdded,"gerp"] <- tmp[,"gerp"]
-  }
-  cat(proc.time()[3] - ps,"s\n");
-  
-  con <- connectToInhouseDB()
-  query <- paste("DROP TABLE IF EXISTS ",tmpSNP.table, sep="")
-  tmp <- dbGetQuery_E(con, query, TALK=TALK)
-  dbDisconnect(con)
-  
-  ## Step 3. Annotate against refSeq genes
-#  cat("  - Annotating SNPs against refGene...",sep="")
-#  ANNOVARcmd <- paste(ANNOVARpath," -geneanno -buildver canFam3 -dbtype refgene ",tmpDatafile," ",ANNOVARpathDB,sep="")
-  cat("  - Annotating SNPs against ensGene...",sep="")
-  ANNOVARcmd <- paste(ANNOVARpath," -geneanno -buildver canFam3 -dbtype ensgene ",tmpDatafile," ",ANNOVARpathDB,sep="")
-  cat(ANNOVARcmd)
-  system(ANNOVARcmd,ignore.stderr=FALSE)
-  
-  variantFunctionFile <- paste(tmpDatafile,".variant_function",sep="")
-  exonicVariantFunctionFile <- paste(tmpDatafile,".exonic_variant_function",sep="")
-  
-  variantFunctionFile
-  file.info(variantFunctionFile)
-  
-  if(file.info(variantFunctionFile)$size > 0){
-    variantFunctions <- read.table(variantFunctionFile, as.is=TRUE)
-    variantCategory <- as.character(variantFunctions[,1])
-    names(variantCategory) <- as.character(variantFunctions[,8])
-    variantGene <- as.character(variantFunctions[,2])
-    names(variantGene) <- as.character(variantFunctions[,8])
-    
-    dataToBeAdded[match(names(variantGene),dataToBeAdded[,"SNP_id"]),"gene"] <- variantGene
-    dataToBeAdded[match(names(variantCategory),dataToBeAdded[,"SNP_id"]),"class"] <- variantCategory
-  }
-  
-  if(file.info(exonicVariantFunctionFile)$size > 0){
-    exonicVariantFunctions <- read.table(exonicVariantFunctionFile, sep="\t")
-    exonicVariantFunctions <- exonicVariantFunctions[which(exonicVariantFunctions[,2] != "unknown"),]
-    exonicVariantCategory <- as.character(exonicVariantFunctions[,2])
-    names(exonicVariantCategory) <- as.character(exonicVariantFunctions[,ncol(exonicVariantFunctions)])
-    exonicVariantDetail <- as.character(exonicVariantFunctions[,3])
-    names(exonicVariantDetail) <- as.character(exonicVariantFunctions[,ncol(exonicVariantFunctions)])
-    
-    dataToBeAdded[match(names(exonicVariantCategory),dataToBeAdded[,"SNP_id"]),"class"] <- exonicVariantCategory
-    dataToBeAdded[match(names(exonicVariantDetail),dataToBeAdded[,"SNP_id"]),"details"] <- exonicVariantDetail
-  }
-  
-  dataToBeAdded[,"class"] <- gsub(" SNV","",dataToBeAdded[,"class"])
-  dataToBeAdded[, "severity"] <- SNPseverity[dataToBeAdded[, "class"]]
-  
-  cat(proc.time()[3] - ps,"s\n");
-  
-  con <- connectToInhouseDB()
-  query <- paste("DROP TABLE IF EXISTS ",tmpSNP.table, sep="")
-  tmp <- dbGetQuery_E(con, query, TALK=TALK)
-  dbDisconnect(con)
+#   ## Step 2. Annotate exonic variants against score table
+#   cat("  - Annotating SNPs with SNP scores...",sep="")
+#   con <- connectToInhouseDB()
+#   query <- paste("SELECT t1.SNP_id,t2.sift FROM ",tmpSNP.table," as t1, ",annotTables[["score"]]," as t2 WHERE t1.SNP_id=t2.SNP_id;", sep="")
+#   cat(query)
+#   tmp <- dbGetQuery_E(con, query, TALK=TALK)
+#   dbDisconnect(con)
+#   if(nrow(tmp)>0){
+#     idsToBeAdded <- match(tmp[,"SNP_id"],dataToBeAdded[,"SNP_id"])
+#     dataToBeAdded[idsToBeAdded,"sift"] <- tmp[,"sift"]
+#   }
+#   cat(proc.time()[3] - ps,"s\n");
+#   
+#   con <- connectToInhouseDB()
+#   query <- paste("DROP TABLE IF EXISTS ",tmpSNP.table, sep="")
+#   tmp <- dbGetQuery_E(con, query, TALK=TALK)
+#   dbDisconnect(con)
+#   
+#   ## Step 3. Annotate against refSeq genes
+# #  cat("  - Annotating SNPs against refGene...",sep="")
+# #  ANNOVARcmd <- paste(ANNOVARpath," -geneanno -buildver canFam3 -dbtype refgene ",tmpDatafile," ",ANNOVARpathDB,sep="")
+#   cat("  - Annotating SNPs against ensGene...",sep="")
+#   ANNOVARcmd <- paste(ANNOVARpath," -geneanno -buildver canFam3 -dbtype ensgene ",tmpDatafile," ",ANNOVARpathDB,sep="")
+#   cat(ANNOVARcmd)
+#   system(ANNOVARcmd,ignore.stderr=FALSE)
+#   
+#   variantFunctionFile <- paste(tmpDatafile,".variant_function",sep="")
+#   exonicVariantFunctionFile <- paste(tmpDatafile,".exonic_variant_function",sep="")
+#   
+#   variantFunctionFile
+#   file.info(variantFunctionFile)
+#   
+#   if(file.info(variantFunctionFile)$size > 0){
+#     variantFunctions <- read.table(variantFunctionFile, as.is=TRUE)
+#     variantCategory <- as.character(variantFunctions[,1])
+#     names(variantCategory) <- as.character(variantFunctions[,8])
+#     variantGene <- as.character(variantFunctions[,2])
+#     names(variantGene) <- as.character(variantFunctions[,8])
+#     
+#     dataToBeAdded[match(names(variantGene),dataToBeAdded[,"SNP_id"]),"gene"] <- variantGene
+#     dataToBeAdded[match(names(variantCategory),dataToBeAdded[,"SNP_id"]),"class"] <- variantCategory
+#   }
+#   
+#   if(file.info(exonicVariantFunctionFile)$size > 0){
+#     exonicVariantFunctions <- read.table(exonicVariantFunctionFile, sep="\t")
+#     exonicVariantFunctions <- exonicVariantFunctions[which(exonicVariantFunctions[,2] != "unknown"),]
+#     exonicVariantCategory <- as.character(exonicVariantFunctions[,2])
+#     names(exonicVariantCategory) <- as.character(exonicVariantFunctions[,ncol(exonicVariantFunctions)])
+#     exonicVariantDetail <- as.character(exonicVariantFunctions[,3])
+#     names(exonicVariantDetail) <- as.character(exonicVariantFunctions[,ncol(exonicVariantFunctions)])
+#     
+#     dataToBeAdded[match(names(exonicVariantCategory),dataToBeAdded[,"SNP_id"]),"class"] <- exonicVariantCategory
+#     dataToBeAdded[match(names(exonicVariantDetail),dataToBeAdded[,"SNP_id"]),"details"] <- exonicVariantDetail
+#   }
+#   
+#   dataToBeAdded[,"class"] <- gsub(" SNV","",dataToBeAdded[,"class"])
+#   dataToBeAdded[, "severity"] <- SNPseverity[dataToBeAdded[, "class"]]
+#   
+#   cat(proc.time()[3] - ps,"s\n");
+#   
+#   con <- connectToInhouseDB()
+#   query <- paste("DROP TABLE IF EXISTS ",tmpSNP.table, sep="")
+#   tmp <- dbGetQuery_E(con, query, TALK=TALK)
+#   dbDisconnect(con)
   
   cleanUpTmpfiles(tmpAnnotationDir)
-  
-  
   
   return(dataToBeAdded)
   
@@ -633,8 +646,8 @@ annotateIndels <- function(inputIndels, tmpAnnotationDir=".", dbSNPversion=151, 
   
   dbDisconnect(con)
   
-  dataToBeAdded <- matrix("", nrow=nrow(dataToBeAnnotated), ncol=16)
-  colnames(dataToBeAdded) <- c("indel_id","chr","start","end","ref","alt","type","size","nr_samples","samples","dbSNP","class","severity","gene","details")
+  dataToBeAdded <- matrix("", nrow=nrow(dataToBeAnnotated), ncol=11)
+  colnames(dataToBeAdded) <- c("indel_id","chr","start","end","ref","alt","type","size","nr_samples","samples","dbSNP")
   dataToBeAdded[, c("indel_id","chr","start","end","ref","alt")] <- as.matrix(dataToBeAnnotated[,c("indel_id","chr","start","end","ref","alt")])
   
   ## Step 1. Filter against dbSNP and dbSNPCommon
@@ -658,52 +671,52 @@ annotateIndels <- function(inputIndels, tmpAnnotationDir=".", dbSNPversion=151, 
   
   cat(proc.time()[3] - ps,"s\n");
   
-  ## Step 2. Annotate against refSeq genes
-  
-  cat("  - Annotating indels against refGene...",sep="")
-  ANNOVARcmd <- paste(ANNOVARpath," -geneanno -buildver canFam3 -dbtype refgene ",tmpDatafile," ",ANNOVARpathDB,sep="")
-  system(ANNOVARcmd,ignore.stderr=TRUE)
-  cat(proc.time()[3] - ps,"s\n");
-  
-  variantFunctionFile <- paste(tmpDatafile,".variant_function",sep="")
-  exonicVariantFunctionFile <- paste(tmpDatafile,".exonic_variant_function",sep="")
-  
-  ## #################################################
-  ##
-  ## Combine all annotations into a single output file
-  ##
-  ## #################################################
-  
-  cat("  - Combining annotations and preparing output...",sep="")
-  
-  dataToBeAdded[, c("indel_id","chr","start","end","ref","alt","type","size","nr_samples","samples")] <- as.matrix(indelData[,c("indel_id","chr","start","end","ref","alt","type","size","nr_samples","samples")])
-  
-  ## Add refSeq annotations
-  if(file.info(variantFunctionFile)$size > 0){
-    variantFunctions <- read.table(variantFunctionFile, as.is=TRUE)
-    variantCategory <- as.character(variantFunctions[,1])
-    names(variantCategory) <- as.character(variantFunctions[,8])
-    variantGene <- as.character(variantFunctions[,2])
-    names(variantGene) <- as.character(variantFunctions[,8])
-    
-    dataToBeAdded[match(names(variantGene),dataToBeAdded[,"indel_id"]),"gene"] <- variantGene
-    dataToBeAdded[match(names(variantCategory),dataToBeAdded[,"indel_id"]),"class"] <- variantCategory
-  }
-  
-  if(file.info(exonicVariantFunctionFile)$size > 0){
-    exonicVariantFunctions <- read.table(exonicVariantFunctionFile, sep="\t")
-    exonicVariantFunctions <- exonicVariantFunctions[which(exonicVariantFunctions[,2] != "unknown"),]
-    exonicVariantCategory <- as.character(exonicVariantFunctions[,2])
-    names(exonicVariantCategory) <- as.character(exonicVariantFunctions[,ncol(exonicVariantFunctions)])
-    exonicVariantDetail <- as.character(exonicVariantFunctions[,3])
-    names(exonicVariantDetail) <- as.character(exonicVariantFunctions[,ncol(exonicVariantFunctions)])
-    
-    dataToBeAdded[match(names(exonicVariantCategory),dataToBeAdded[,"indel_id"]),"class"] <- exonicVariantCategory
-    dataToBeAdded[match(names(exonicVariantDetail),dataToBeAdded[,"indel_id"]),"details"] <- exonicVariantDetail
-  }
-  
-  dataToBeAdded[, "severity"] <- indelSeverity[dataToBeAdded[, "class"]]
-  
+  # ## Step 2. Annotate against refSeq genes
+  # 
+  # cat("  - Annotating indels against refGene...",sep="")
+  # ANNOVARcmd <- paste(ANNOVARpath," -geneanno -buildver canFam3 -dbtype refgene ",tmpDatafile," ",ANNOVARpathDB,sep="")
+  # system(ANNOVARcmd,ignore.stderr=TRUE)
+  # cat(proc.time()[3] - ps,"s\n");
+  # 
+  # variantFunctionFile <- paste(tmpDatafile,".variant_function",sep="")
+  # exonicVariantFunctionFile <- paste(tmpDatafile,".exonic_variant_function",sep="")
+  # 
+  # ## #################################################
+  # ##
+  # ## Combine all annotations into a single output file
+  # ##
+  # ## #################################################
+  # 
+  # cat("  - Combining annotations and preparing output...",sep="")
+  # 
+  # dataToBeAdded[, c("indel_id","chr","start","end","ref","alt","type","size","nr_samples","samples")] <- as.matrix(indelData[,c("indel_id","chr","start","end","ref","alt","type","size","nr_samples","samples")])
+  # 
+  # ## Add refSeq annotations
+  # if(file.info(variantFunctionFile)$size > 0){
+  #   variantFunctions <- read.table(variantFunctionFile, as.is=TRUE)
+  #   variantCategory <- as.character(variantFunctions[,1])
+  #   names(variantCategory) <- as.character(variantFunctions[,8])
+  #   variantGene <- as.character(variantFunctions[,2])
+  #   names(variantGene) <- as.character(variantFunctions[,8])
+  #   
+  #   dataToBeAdded[match(names(variantGene),dataToBeAdded[,"indel_id"]),"gene"] <- variantGene
+  #   dataToBeAdded[match(names(variantCategory),dataToBeAdded[,"indel_id"]),"class"] <- variantCategory
+  # }
+  # 
+  # if(file.info(exonicVariantFunctionFile)$size > 0){
+  #   exonicVariantFunctions <- read.table(exonicVariantFunctionFile, sep="\t")
+  #   exonicVariantFunctions <- exonicVariantFunctions[which(exonicVariantFunctions[,2] != "unknown"),]
+  #   exonicVariantCategory <- as.character(exonicVariantFunctions[,2])
+  #   names(exonicVariantCategory) <- as.character(exonicVariantFunctions[,ncol(exonicVariantFunctions)])
+  #   exonicVariantDetail <- as.character(exonicVariantFunctions[,3])
+  #   names(exonicVariantDetail) <- as.character(exonicVariantFunctions[,ncol(exonicVariantFunctions)])
+  #   
+  #   dataToBeAdded[match(names(exonicVariantCategory),dataToBeAdded[,"indel_id"]),"class"] <- exonicVariantCategory
+  #   dataToBeAdded[match(names(exonicVariantDetail),dataToBeAdded[,"indel_id"]),"details"] <- exonicVariantDetail
+  # }
+  # 
+  # dataToBeAdded[, "severity"] <- indelSeverity[dataToBeAdded[, "class"]]
+
   cat(proc.time()[3] - ps,"s\n");
   
   con <- connectToInhouseDB()
@@ -813,5 +826,103 @@ rebuildSNPSummary <- function(){
   }
   
   query <- "update snp_summary set samples=substr(samples,2);"
+  res <- dbGetQuery_E(con,query,TALK=FALSE)
+}
+
+rebuildIndelSummary <- function(){
+  
+  ps <- proc.time()[3]
+  
+  con <- connectToInhouseDB()
+  sample.table <- dbTables[["sample"]]
+  Indelsummary.table <- dbTables[["indel.summary"]]
+  chunkSize <- 500000
+  
+  sampleIds <- list()
+  IndelidsInSummary <- NULL
+  
+  query <- paste("SELECT indel_id FROM ",Indelsummary.table,";")
+  currIndelIds <- dbGetQuery_E(con,query,TALK=FALSE)
+  if(nrow(currIndelIds)>0){ IndelIdsInSummary <- currIndelIds[,"indel_id"] }
+  
+  query <- paste("UPDATE ",Indelsummary.table," SET nr_samples=0, samples='';",sep="")
+  res <- dbGetQuery_E(con,query,TALK=FALSE)
+  
+  query <- paste("SELECT sample_id FROM ",sample.table,";",sep="")
+  res <- dbGetQuery_E(con,query,TALK=FALSE)
+  sampleIds <- res[,1]
+  
+  for(sampleId in sampleIds){
+    
+    cat("Processing sample ",sampleId," of ",length(sampleIds),"...\n",sep="")
+    
+    IndelData.table <- paste("indel_data_",sampleId,sep="")
+    variantsForSample <- list()
+    IndelsToBeInserted <- list()
+    
+    IndelsToBeInserted[["nrSamples"]] <- array(NA,0)
+    IndelsToBeInserted[["sampleStr"]] <- array(NA,0)
+    
+    variantsForSample[["sample_id"]] <- sampleId
+    variantsForSample[["Indels"]] <- NULL
+    variantsForSample[["indels"]] <- NULL
+    
+    query <- paste("SELECT indel_id FROM ",IndelData.table,";",sep="")
+    indelIds <- dbGetQuery_E(con,query,TALK=FALSE)
+    variantsForSample[["indels"]] <- indelIds[,1]
+    
+    IndelIds <- variantsForSample[["indels"]]
+    
+    sampleStr <- paste(",",sampleId,sep="")
+    
+    seenIndels <- (names(IndelsToBeInserted[["nrSamples"]]) %in% IndelIds)
+    IndelsToBeInserted[["sampleStr"]][seenIndels] <- paste(IndelsToBeInserted[["sampleStr"]][seenIndels],sampleStr,sep="")
+    IndelsToBeInserted[["nrSamples"]][seenIndels] <- IndelsToBeInserted[["nrSamples"]][seenIndels]+1
+    
+    newIndelIds <- IndelIds[!(IndelIds %in% names(IndelsToBeInserted[["nrSamples"]]))]
+    
+    sampleStrsToBeAdded <- rep(as.character(sampleId), length(newIndelIds))
+    names(sampleStrsToBeAdded) <- newIndelIds
+    nrSamplesToBeAdded <- rep(1, length(newIndelIds))
+    names(nrSamplesToBeAdded) <- newIndelIds
+    IndelsToBeInserted[["sampleStr"]] <- c(IndelsToBeInserted[["sampleStr"]], sampleStrsToBeAdded)
+    IndelsToBeInserted[["nrSamples"]] <- c(IndelsToBeInserted[["nrSamples"]], nrSamplesToBeAdded)
+    
+    IndelObjectsize <- object.size(IndelsToBeInserted)
+    cat("Object sizes, Indels:",IndelObjectsize,"\n")
+    
+    IndelsToBeInsertedTable <- cbind(names(IndelsToBeInserted[["nrSamples"]]), IndelsToBeInserted[["nrSamples"]], IndelsToBeInserted[["sampleStr"]])
+    colnames(IndelsToBeInsertedTable) <- c("indel_id","nr_samples","sample_str")
+    
+    totalNrToInsert <- nrow(IndelsToBeInsertedTable)
+    
+    ## Divide large data into smaller chunks, to make sure MySQL doesn't crash
+    chunkStart <- 1
+    chunkEnd <- min(chunkSize,totalNrToInsert)
+    moreChunksToInsert <- TRUE
+    
+    while(moreChunksToInsert){
+      
+      IndelsToBeInsertedTableChunk <- IndelsToBeInsertedTable[chunkStart:chunkEnd,]
+      
+      alreadyInSummary <- (IndelsToBeInsertedTableChunk[,"indel_id"] %in% IndelIdsInSummary)
+      IndelsToBeUpdated <- IndelsToBeInsertedTableChunk[alreadyInSummary,,drop=FALSE]
+      IndelsToBeAdded <- IndelsToBeInsertedTableChunk[!alreadyInSummary,,drop=FALSE]
+      IndelIdsInSummary <- c(IndelIdsInSummary,IndelsToBeAdded[,"indel_id"])
+      
+      cat(" chunk:",chunkStart,"-",chunkEnd," total:",nrow(IndelsToBeInsertedTable)," to update:",nrow(IndelsToBeUpdated)," to add:",nrow(IndelsToBeAdded),proc.time()[3] - ps,"s\n");
+      updateIndelSummaryTable(IndelsToBeUpdated, IndelsToBeAdded)
+      
+      if(chunkEnd<totalNrToInsert){
+        chunkStart <- chunkEnd+1
+        chunkEnd <-  min(chunkEnd+chunkSize,totalNrToInsert)
+      }
+      else{
+        moreChunksToInsert <- FALSE
+      }
+    }
+  }
+  
+  query <- "update indel_summary set samples=substr(samples,2);"
   res <- dbGetQuery_E(con,query,TALK=FALSE)
 }

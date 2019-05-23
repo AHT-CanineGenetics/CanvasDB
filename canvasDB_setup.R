@@ -61,7 +61,7 @@ initDB <- function(TALK=FALSE){
                    "canvas_id varchar(20), ",
                    "library_type varchar(20), ",
                    "read_type varchar(20), ",
-                   "capture_method varchar(20), ",
+                   "capture_method varchar(100), ",
                    "seq_platform varchar(20), ",
                    "instrument_name varchar(20), ",
                    "file_format varchar(20), ",
@@ -85,10 +85,9 @@ initDB <- function(TALK=FALSE){
                    "canvas_id varchar(20), ",
                    "sample_name varchar(50), ",
                    "gender varchar(10), ",
-                   "geographic_location varchar(50), ",
                    "phenotypes varchar(200), ",
                    "comments varchar(255), ",
-                   "principal_investigator varchar(10), ",
+                   "principal_investigator varchar(20), ",
                    "PRIMARY KEY (sample_id)",
                    ") ENGINE=",mysqlEngine," DEFAULT CHARSET=latin1",sep="")
 
@@ -111,24 +110,18 @@ initDB <- function(TALK=FALSE){
                    "nr_samples integer(6),",
                    "samples blob,",
                    "snp",dbSNPversion," varchar(20), ",
-#                   "snp",dbSNPversion,"common varchar(20), ",
-                   "class varchar(40), ",
+  #                 "class varchar(40), ",
                    "severity integer(2), ",
-                   "gene varchar(100), ",
-                   "details varchar(200), ",
-                   "sift varchar(10), ",
-                   "polyphen varchar(10), ",
-#                   "phylop varchar(10), ",
-#                   "lrt varchar(10), ",
-#                   "mut_taster varchar(10), ",
-#                   "gerp varchar(10), ",
+  #                 "gene varchar(100), ",
+  #                 "details varchar(200), ",
+  #                 "sift varchar(10), ",
                    "PRIMARY KEY(SNP_id)",
                    ") ENGINE=",mysqlEngine," DEFAULT CHARSET=latin1",sep="")
 
     tmp <- dbGetQuery_E(con,query,TALK=TALK)
 
 #    query <- paste("CREATE INDEX summary_idx ON ",SNPsummary.table," (nr_samples, snp",dbSNPversion,"common,  snp",dbSNPversion,", severity);",sep="")
-    query <- paste("CREATE INDEX summary_idx ON ",SNPsummary.table," (nr_samples, snp",dbSNPversion,", severity);",sep="")
+    query <- paste("CREATE INDEX summary_idx ON ",SNPsummary.table," (nr_samples, snp",dbSNPversion,");",sep="")
     tmp <- dbGetQuery_E(con,query,TALK=TALK)
 
     query <- paste("CREATE INDEX chrpos ON ",SNPsummary.table," (chr, pos);",sep="")
@@ -151,11 +144,10 @@ initDB <- function(TALK=FALSE){
                    "nr_samples integer(6),",
                    "samples blob,",
                    "snp",dbSNPversion," varchar(20), ",
-                   #"snp",dbSNPversion,"common varchar(20), ",
-                   "class varchar(40), ",
+#                   "class varchar(40), ",
                    "severity integer(2), ",
-                   "gene varchar(100), ",
-                   "details varchar(200), ",
+#                   "gene varchar(100), ",
+#                   "details varchar(200), ",
                    "PRIMARY KEY(indel_id)",
                    ") ENGINE=",mysqlEngine," DEFAULT CHARSET=latin1",sep="")
 
@@ -163,7 +155,7 @@ initDB <- function(TALK=FALSE){
 
 
     #query <- paste("CREATE INDEX summary_idx ON ",indelSummary.table," (nr_samples, snp",dbSNPversion,"common,  snp",dbSNPversion,", severity);",sep="")
-    query <- paste("CREATE INDEX summary_idx ON ",indelSummary.table," (nr_samples, snp",dbSNPversion,", severity);",sep="")
+    query <- paste("CREATE INDEX summary_idx ON ",indelSummary.table," (nr_samples, snp",dbSNPversion,");",sep="")
     tmp <- dbGetQuery_E(con,query,TALK=TALK)
 
     query <- paste("CREATE INDEX chrpos ON ",indelSummary.table," (chr, start, end);",sep="")
